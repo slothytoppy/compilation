@@ -38,8 +38,6 @@ printf("not enough args\n");
 return -1;
   }
 char* output=fext(argv[1]);
-/* mkdir("/bin", 0644); */
-// strcat("/bin", output);
 char* command[]={"gcc", "-Wall", argv[1], "-o" , fext(argv[1]), NULL};
 printf("compiled:%s output is:%s\n", argv[1], fext(argv[1]));
 exec(command);
