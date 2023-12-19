@@ -2,7 +2,7 @@
 #include "comp.h"
 
 int main(int argc, char* argv[]){
-/* struct stat fi;
+struct stat fi;
 if(argc==1){ 
 printf("not enough args\n"); 
 return -1;
@@ -18,7 +18,6 @@ exec(command);
 stat(output, &fi);
 printf("output size:%ld\n", fi.st_size);
 printf("mode:%o\n", fi.st_mode);
-*/
 printf("%s\n", base("compilation.c"));
 printf("%s\n", ext("compilation.c"));
 return 0;
