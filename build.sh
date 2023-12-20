@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 if ls ./bin > /dev/null 2>&1 ; then 
-gcc compilation.c -o bin/compilation
+gcc example -o bin/example
 gcc test.c -o bin/test
 else 
   mkdir ./bin
