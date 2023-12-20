@@ -68,8 +68,8 @@ char* base(char* file){
 
 // add compile_all functionality
 
-int compile_all(char* directory){
-struct stat fi;
+int compile_all(char* directory, char* compiler){
+// struct stat fi;
 struct dirent *dirent;
 DIR* DIR;
 DIR=opendir(directory);
@@ -77,11 +77,14 @@ DIR=opendir(directory);
     while((dirent=readdir(DIR))!=NULL){
       if(strlen(dirent->d_name)!=1 && dirent->d_name[1]!='.' != strlen(dirent->d_name)!=2 && strcmp(dirent->d_name, "..")!=0){
       if(strcmp(ext(dirent->d_name), ".c")==0){
-	printf("{%s}\n", dirent->d_name);
+      char* command[]={compiler, dirent->d_name, "-o", base(dirent->d_name), NULL};
+      exec(command);
+      printf("executed: %s\n", *command);
       }
       }
     }
-  }
+  } 
       closedir(DIR);
+return 0;
 }
 #endif

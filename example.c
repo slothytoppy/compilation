@@ -19,12 +19,11 @@ printf("output size:%ld\n", fi.st_size);
 printf("mode:%o\n", fi.st_mode);
 //printf("%s\n", base("compilation.c"));
 // printf("%s\n", ext("compilation.c"));
-compile_all("gend.c");
-//char* command[]={"nvim", "compilation.c", NULL};
+// compile_all("gend.c");
 //if(strcmp(ext("gend.c"), ".c")==0){
 //  printf("ext:%s\n", ext("gend.c"));
 // }
 //exec(command);
-compile_all(".");
+compile_all(".", "gcc");
 return 0;
 }
