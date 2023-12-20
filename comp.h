@@ -65,10 +65,23 @@ char* base(char* file){
     *lastExt = '\0';
   return retStr;
 }
-/*int compile_all(DIR* dir){
-  struct dirent dirent;
-  while(dir){
-  if()
+
+// add compile_all functionality
+
+int compile_all(char* directory){
+struct stat fi;
+struct dirent *dirent;
+DIR* DIR;
+DIR=opendir(directory);
+  if(DIR){
+    while((dirent=readdir(DIR))!=NULL){
+      if(strlen(dirent->d_name)!=1 && dirent->d_name[1]!='.' != strlen(dirent->d_name)!=2 && strcmp(dirent->d_name, "..")!=0){
+      if(strcmp(ext(dirent->d_name), ".c")==0){
+	printf("{%s}\n", dirent->d_name);
+      }
+      }
+    }
   }
-  } */
+      closedir(DIR);
+}
 #endif
