@@ -2,6 +2,7 @@
 
 if ls ./bin > /dev/null 2>&1 ; then 
 gcc example.c -o bin/example
+gcc example -o bin/example
 gcc test.c -o bin/test
 else 
   mkdir ./bin
