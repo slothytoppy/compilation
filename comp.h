@@ -67,7 +67,8 @@ char* base(char* file){
   return retStr;
 }
 
-// add compile_all functionality
+/* TODO: implement recursion for compile all, maybe i should check if the current d_type is a directory then open that, then run compile_all from within that directory
+ to compile all files in that directory that match extension, but then i would have to have a "root" directory which would be "directory" for the compile_all function. */
 
 int compile_all(char* directory, char* compiler, char* extension){
   struct stat fi;
