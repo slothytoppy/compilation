@@ -15,6 +15,7 @@ int compile_all(DIR* dir);
 
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 int exec(char* args[]){
   pid_t id=fork();
@@ -31,24 +32,24 @@ int exec(char* args[]){
 }
 
 int len(char* str1){
-if(str1==NULL) return -1;
-int i=0;
+  if(str1==NULL) return -1;
+  int i=0;
   while(*str1++){
-  i++;
+    i++;
   }
   return i;
 }
 
 char* ext(char* filename){
-int i;
-char* ext={0};
-int sz=len(filename);
-if(sz<0) return NULL;
+  int i;
+  char* ext={0};
+  int sz=len(filename);
+  if(sz<0) return NULL;
   for(i=0; i<sz; i++){
     if(filename[i]=='.'){ 
-    ext=strdup(filename);
-    ext=strrchr(filename, '.');
-    return ext;
+      ext=strdup(filename);
+      ext=strrchr(filename, '.');
+      return ext;
     }
   } 
   return filename;
@@ -69,26 +70,32 @@ char* base(char* file){
 // add compile_all functionality
 
 int compile_all(char* directory, char* compiler, char* extension){
-// struct stat fi;
-if(directory==NULL || compiler==NULL || extension==NULL){
-  fprintf(stderr, "directory, compiler, or extension was NULL\n"); 
-  return -1;
-}
-struct dirent *dirent;
-DIR* DIR;
-DIR=opendir(directory);
+  struct stat fi;
+  if(directory==NULL || compiler==NULL || extension==NULL){
+    fprintf(stderr, "directory, compiler, or extension was NULL\n"); 
+    return -1;
+  }
+  struct dirent *dirent;
+  DIR* DIR;
+  DIR=opendir(directory);
   if(DIR){
     while((dirent=readdir(DIR))!=NULL){
       if(strlen(dirent->d_name)>1 && strcmp(dirent->d_name, ".")!=0 && strlen(dirent->d_name)>2 && strcmp(dirent->d_name, "..")!=0){
-      if(strcmp(ext(dirent->d_name), extension)==0){
-      char* command[]={compiler, dirent->d_name, "-o", base(dirent->d_name), NULL};
-      exec(command);
-      printf("executed: %s\n", *command);
-      }
+	if(strcmp(ext(dirent->d_name), extension)==0){
+	  char* command[]={compiler, dirent->d_name, "-o", base(dirent->d_name), NULL};
+	  exec(command);
+	  if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
+	  printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]);
+	  }
+	}
       }
     }
-  } 
-      closedir(DIR);
-return 0;
+  }
+  else if(ENOENT==errno){
+  closedir(DIR);
+  return -1;
+  }
+  closedir(DIR);
+  return 0;
 }
 #endif
