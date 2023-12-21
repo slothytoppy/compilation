@@ -24,6 +24,6 @@ printf("mode:%o\n", fi.st_mode);
 //  printf("ext:%s\n", ext("gend.c"));
 // }
 //exec(command);
-compile_all(".", "gcc");
+compile_all(".", "gcc", ".c");
 return 0;
 }
