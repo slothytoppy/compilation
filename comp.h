@@ -1,7 +1,7 @@
 #ifndef COMPILATION_IMPLEMENTATION
 int exec(char* args[]);
 int len(char* str1);
-char* fext(char* file);
+char* ext(char* file);
 char* base(char* path);
 int compile_all(DIR* dir);
 #endif
@@ -42,12 +42,11 @@ int len(char* str1){
 
 char* ext(char* filename){
   int i;
-  char* ext={0};
   int sz=len(filename);
   if(sz<0) return NULL;
   for(i=0; i<sz; i++){
     if(filename[i]=='.'){ 
-      ext=strdup(filename);
+      char* ext=strdup(filename);
       ext=strrchr(filename, '.');
       return ext;
     }
@@ -72,31 +71,34 @@ char* base(char* file){
 
 int compile_all(char* directory, char* compiler, char* extension){
   struct stat fi;
+  struct dirent *dirent;
+  DIR* Dir;
   if(directory==NULL || compiler==NULL || extension==NULL){
-    fprintf(stderr, "directory, compiler, or extension was NULL\n"); 
+    fprintf(stderr, "directory, compiler, extension, or executable path was null\n"); 
     return -1;
   }
-  struct dirent *dirent;
-  DIR* DIR;
-  DIR=opendir(directory);
-  if(DIR){
-    while((dirent=readdir(DIR))!=NULL){
+  Dir=opendir(directory);
+  if(Dir){
+    while((dirent=readdir(Dir))!=NULL){
       if(strlen(dirent->d_name)>1 && strcmp(dirent->d_name, ".")!=0 && strlen(dirent->d_name)>2 && strcmp(dirent->d_name, "..")!=0){
 	if(strcmp(ext(dirent->d_name), extension)==0){
 	  char* command[]={compiler, dirent->d_name, "-o", base(dirent->d_name), NULL};
 	  exec(command);
 	  if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
 	  printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]);
-	  }
+	  } else{
+	    if(stat(command[1], &fi)!=0) printf("file:{%s} doesnt exist\n", command[1]);
+	    if(stat(command[3], &fi)!=0) printf("file:{%s} doesnt exist\n", command[3]);
+	}
 	}
       }
     }
   }
   else if(ENOENT==errno){
-  closedir(DIR);
+  closedir(Dir);
   return -1;
   }
-  closedir(DIR);
+  closedir(Dir);
   return 0;
 }
 #endif
