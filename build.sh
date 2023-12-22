@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 if ls ./bin > /dev/null 2>&1 ; then 
-gcc -Wall example.c -o bin/example
+gcc -Wall -Wextra example.c -o bin/example
 else 
   mkdir ./bin
 fi
