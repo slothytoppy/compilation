@@ -69,6 +69,15 @@ char* base(char* file){
 /* TODO: implement recursion for compile all, maybe i should check if the current d_type is a directory then open that, then run compile_all from within that directory
  to compile all files in that directory that match extension, but then i would have to have a "root" directory which would be "directory" for the compile_all function. */
 
+int IS_FILE_DIR(const char* path){
+struct stat fi;
+if(stat(path, &fi)<0){
+  if(errno==ENOENT) 
+  fprintf(stderr, "could not open %s %s\n", path, strerror(errno));
+  return ENOENT;
+} else return S_ISDIR(fi.st_mode);
+}
+
 int compile_targets(char* files[],char* compiler, char* extension){
 if(files==NULL || compiler==NULL || extension==NULL){
   fprintf(stderr, "list of files, compiler or extension was null\n");
@@ -105,8 +114,7 @@ int compile_all(char* directory, char* compiler, char* extension){
 	  if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
 	  printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]);
 	  } else{
-	    if(stat(command[1], &fi)!=0) printf("file:{%s} doesnt exist\n", command[1]);
-	    if(stat(command[3], &fi)!=0) printf("file:{%s} doesnt exist\n", command[3]);
+	    printf("file:{%s} or {%s} doesnt exist\n", command[1], command[3]);
 	}
 	}
       }
@@ -119,4 +127,7 @@ int compile_all(char* directory, char* compiler, char* extension){
   closedir(Dir);
   return 0;
 }
+
+/* TODO add optional recursion to compile_all */
+
 #endif
