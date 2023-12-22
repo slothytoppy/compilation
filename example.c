@@ -1,6 +1,7 @@
 #define COMPILATION_IMPLEMENTATION
 #include "comp.h"
 int main(int argc, char* argv[]){
-compile_all(".", "gcc", ".c");
+char* targets[]={"test.c", "example.c", NULL};
+compile_targets(targets, "gcc", ".c");
 return 0;
 }
