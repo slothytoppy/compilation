@@ -2,6 +2,8 @@
 
 if ls ./bin > /dev/null 2>&1 ; then 
 gcc -Wall -Wextra example.c -o bin/example
+gcc -Wall example.c -o bin/example
+print("hello")
 else 
   mkdir ./bin
 fi

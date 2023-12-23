@@ -4,6 +4,10 @@ int len(const char* str1);
 char* ext(const char* file);
 char* base(const char* path);
 int IS_FILE_DIR(const char* path);
+int MKFILE(const char* file);
+int RMFILE(const char* file);
+int MKDIR(const char* path);
+int RMDIR(const char *path);
 int compile_targets(const char* files[], const char* compiler, const char* extension)
 int compile_all(const char* directory, const char* compiler, const char* extension)
 #endif
@@ -18,6 +22,9 @@ int compile_all(const char* directory, const char* compiler, const char* extensi
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <fcntl.h>
+
+typedef const char* Cstr;
 
 int exec(char* args[]){
   pid_t id=fork();
@@ -33,7 +40,7 @@ int exec(char* args[]){
   return 0;
 }
 
-int len(const char* str1){
+int len(Cstr str1){
   if(str1==NULL) return -1;
   int i=0;
   while(*str1++){
@@ -42,7 +49,7 @@ int len(const char* str1){
   return i;
 }
 
-const char* ext(const char* filename){
+const char* ext(Cstr filename){
   int i;
   int sz=len(filename);
   if(sz<0) return NULL;
@@ -56,7 +63,7 @@ const char* ext(const char* filename){
   return filename;
 }
 
-char* base(const char* file){
+char* base(Cstr file){
   if (file==NULL) return NULL;
   char *retStr;
   char *lastExt;
@@ -71,16 +78,62 @@ char* base(const char* file){
 /* TODO: implement recursion for compile all, maybe i should check if the current d_type is a directory then open that, then run compile_all from within that directory
  to compile all files in that directory that match extension, but then i would have to have a "root" directory which would be "directory" for the compile_all function. */
 
-int IS_FILE_DIR(const char* path){
+int IS_FILE_DIR(Cstr path){
 struct stat fi;
 if(stat(path, &fi)<0){
   if(errno==ENOENT) 
-  fprintf(stderr, "could not open %s %s\n", path, strerror(errno));
+  fprintf(stderr, "could not open %s", path);
+  perror("errno");
   return ENOENT;
 } else return S_ISDIR(fi.st_mode);
 }
 
-int compile_targets(char* files[], char* compiler, const char* extension){
+int MKFILE(const char* file){
+struct stat fi;
+  if(stat(file, &fi)!=0){
+  if(creat(file, 0644)<0){
+  fprintf(stderr, "mkfile error:%s %d", file, errno);
+  return -1;
+  }
+  }
+  return 0;
+}
+
+int RMFILE(const char* file){
+struct stat fi;
+  if(stat(file, &fi)!=0){
+  if(unlink(file)<0){
+  fprintf(stderr, "rmfile error:%s %d", file, errno);
+  return -1;
+  }
+  }
+  return 0;
+}
+
+int MKDIR(const char* path){
+struct stat fi;
+  if(stat(path, &fi)!=0){
+  mode_t perms = S_IRWXU | S_IRWXG | S_IRWXO;
+  if(mkdir(path, perms)<0){ 
+  fprintf(stderr, "mkdir error:%s %d", path, errno);
+  return -1;
+  }
+  }
+  return 0;
+}
+
+int RMDIR(const char *path){
+struct stat fi;
+  if(stat(path, &fi)!=0){
+  if(rmdir(path)<0){
+  fprintf(stderr, "rmdir error:%s %d", path, errno);
+  return -1;
+  }
+  }
+  return 0;
+}
+
+int compile_targets(char* files[], char* compiler, Cstr extension){
 if(files==NULL || compiler==NULL || extension==NULL){
   fprintf(stderr, "list of files, compiler or extension was null\n");
   return -1;
@@ -98,7 +151,7 @@ if(stat(files[i], &fi)==0 && strcmp(ext(files[i]), extension)==0){
 return 0;
 }
 
-int compile_all(const char* directory, char* compiler, const char* extension){
+int compile_all(Cstr directory, char* compiler, Cstr extension){
   struct stat fi;
   struct dirent *dirent;
   DIR* Dir;
