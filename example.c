@@ -4,6 +4,10 @@
 int main(void){
 // MKDIR("hello");
 // compile_all(".", "gcc", ".c", "bin");
-compile_all("examples", "tcc", ".c", "examples");
+if(is_path1_modified_after_path2("example.c", "bin/example")){
+  printf("YES\n");
+}
+
+compile_all("tests", "tcc", ".c", "tests");
 return 0;
 }
