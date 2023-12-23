@@ -4,6 +4,6 @@
 int main(void){
 // MKDIR("hello");
 // compile_all(".", "gcc", ".c", "bin");
-compile_all("examples", "gcc", ".c", "examples");
+compile_all("examples", "tcc", ".c", "examples");
 return 0;
 }
