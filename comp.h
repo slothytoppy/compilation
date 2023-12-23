@@ -151,11 +151,11 @@ if(stat(files[i], &fi)==0 && strcmp(ext(files[i]), extension)==0){
 return 0;
 }
 
-int compile_all(Cstr directory, char* compiler, Cstr extension){
+int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_directory){
   struct stat fi;
   struct dirent *dirent;
   DIR* Dir;
-  if(directory==NULL || compiler==NULL || extension==NULL){
+  if(directory==NULL || compiler==NULL || extension==NULL || target_directory==NULL){
     fprintf(stderr, "directory, compiler, extension or executable path was null\n"); 
     return -1;
   }
@@ -165,12 +165,13 @@ int compile_all(Cstr directory, char* compiler, Cstr extension){
       if(strlen(dirent->d_name)>1 && strcmp(dirent->d_name, ".")!=0 && strlen(dirent->d_name)>2 && strcmp(dirent->d_name, "..")!=0){
 	if(strcmp(ext(dirent->d_name), extension)==0){
 	  if(strcmp(directory, ".")!=0){
-	  char buff[PATH_MAX];
-	  char* cwd=getcwd(buff, sizeof(buff));
+          char* cwd=malloc(sizeof(cwd) * PATH_MAX);;
+	  strcat(cwd, target_directory);
+	  printf("cwd:%s\n", cwd);
 	  strcat(cwd, "/");
-	  strcat(cwd, directory);
-	  strcat(cwd, "/");
+	  printf("cwd:%s\n", cwd);
 	  strcat(cwd, base(dirent->d_name));
+	  printf("cwd:%s\n", cwd);
 	  char* command[]={compiler, dirent->d_name, "-o", cwd, NULL};
 	  exec(command); 
 	  if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
@@ -179,6 +180,7 @@ int compile_all(Cstr directory, char* compiler, Cstr extension){
 	  else{
 	  printf("file:{%s} or {%s} doesnt exist\n", command[1], command[3]);
 	  }
+	  free(cwd);
 	  }
 	  if(strcmp(directory, ".")==0){
 	  char* cwd=base(dirent->d_name);
