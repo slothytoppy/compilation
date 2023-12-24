@@ -10,7 +10,7 @@ int MKDIR(const char* path);
 int RMDIR(const char *path);
 int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path);
 int compile_targets(const char* files[], const char* compiler, const char* extension);
-int compile_all(Cstr source_file, Cstr directory, char* compiler, char* flags[], Cstr extension, char* target_directory){
+int compile_all(Cstr source_file, Cstr directory, char* compiler, char* flags[], Cstr extension, char* target_directory)
 #endif
 
 #ifdef COMPILATION_IMPLEMENTATION
@@ -24,6 +24,7 @@ int compile_all(Cstr source_file, Cstr directory, char* compiler, char* flags[],
 #include <sys/stat.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <assert.h>
 
 typedef const char* Cstr;
 
@@ -162,7 +163,7 @@ int compile_targets(char* files[], char* compiler, Cstr extension){
   return 0;
 }
 
-int compile_all(Cstr directory, char* compiler, char* flags[], Cstr extension, char* target_directory){
+int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_directory){
   struct stat fi;
   struct dirent *dirent;
   DIR* Dir;
@@ -188,21 +189,21 @@ int compile_all(Cstr directory, char* compiler, char* flags[], Cstr extension, c
 	      // printf("name:%s cwd:%s\n", dirent->d_name, cwd);
 	      strcat(dname, getcwd(buff, sizeof(buff)));
 	      strcat(dname, "/");
-	      strcat(dname, target_directory);
+	      strcat(dname, directory);
 	      strcat(dname, "/");
 	      strcat(dname, dirent->d_name);
-	      if(flags==NULL){
-		char* command[]={compiler, dname, "-o", cwd, NULL};
-		exec(command);  
+	      char* command[]={compiler, dname, "-o", cwd, NULL};
+	      printf("dname:{%s} cwd:{%s}\n", dname, cwd);
+	      exec(command);  
 	      if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
 	      printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]); 
-	      }
 	      }
 	      free(cwd);
 	  }
 	  if(strcmp(directory, ".")==0){
 	    char* cwd=base(dirent->d_name);
 	    char* command[]={compiler, dirent->d_name, "-o", cwd, NULL};
+	      printf("d_name:{%s} cwd:{%s}\n", dirent->d_name, cwd);
 	      exec(command);
 	      if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
 		printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]);
@@ -219,6 +220,15 @@ int compile_all(Cstr directory, char* compiler, char* flags[], Cstr extension, c
     return -1;
   }
   closedir(Dir);
+  return 0;
+}
+
+int GO_REBUILD(char* file,char** argv){
+  assert(file!=NULL && argv!=NULL);
+  if(is_path1_modified_after_path2(file, argv[0])){
+  char* command[]={"cc", "-o", argv[0], file, NULL};
+  exec(command); 
+  }
   return 0;
 }
 
