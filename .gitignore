@@ -1,0 +1,7 @@
+example
+test
+test.c
+bin/
+.git
+nobuild/
+tests/
