@@ -4,6 +4,7 @@ int len(const char* str1);
 char* ext(const char* file);
 char* base(const char* path);
 int IS_FILE_DIR(const char* path);
+int IS_FILE_FILE(const char* file);
 int MKFILE(const char* file);
 int RMFILE(const char* file);
 int MKDIR(const char* path);
@@ -85,6 +86,10 @@ int IS_FILE_DIR(Cstr path){
     perror("errno");
     return ENOENT;
   } else return S_ISDIR(fi.st_mode);
+}
+
+int IS_FILE_FILE(Cstr file){
+  return file;
 }
 
 int MKFILE(const char* file){
@@ -177,6 +182,9 @@ int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_dir
       if(strlen(dirent->d_name)>1 && strcmp(dirent->d_name, ".")!=0 && strlen(dirent->d_name)>2 && strcmp(dirent->d_name, "..")!=0){
 	if(strcmp(ext(dirent->d_name), extension)==0){
 	  if(strcmp(directory, ".")!=0){
+	    if(!IS_FILE_DIR(directory) && !IS_FILE_DIR(target_directory)){
+	    fprintf(stderr, "%s or %s isnt a directory\n", directory, target_directory);
+	    }
 	    char* cwd=malloc(sizeof(cwd) * PATH_MAX);;
 	    char* dname=malloc(sizeof(dname) * PATH_MAX);;
 	    char buff[PATH_MAX];
@@ -193,7 +201,7 @@ int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_dir
 	      strcat(dname, "/");
 	      strcat(dname, dirent->d_name);
 	      char* command[]={compiler, dname, "-o", cwd, NULL};
-	      printf("dname:{%s} cwd:{%s}\n", dname, cwd);
+	      // printf("dname:{%s} cwd:{%s}\n", dname, cwd);
 	      exec(command);  
 	      if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
 	      printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]); 
@@ -203,7 +211,7 @@ int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_dir
 	  if(strcmp(directory, ".")==0){
 	    char* cwd=base(dirent->d_name);
 	    char* command[]={compiler, dirent->d_name, "-o", cwd, NULL};
-	      printf("d_name:{%s} cwd:{%s}\n", dirent->d_name, cwd);
+	      // printf("d_name:{%s} cwd:{%s}\n", dirent->d_name, cwd);
 	      exec(command);
 	      if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
 		printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]);
@@ -228,6 +236,7 @@ int GO_REBUILD(char* file,char** argv){
   if(is_path1_modified_after_path2(file, argv[0])){
   char* command[]={"cc", "-o", argv[0], file, NULL};
   exec(command); 
+  printf("executed:%s source:%s binary:%s\n", command[0], command[3], command[2]); 
   }
   return 0;
 }
