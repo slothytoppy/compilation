@@ -162,7 +162,7 @@ int compile_targets(char* files[], char* compiler, Cstr extension){
   return 0;
 }
 
-int compile_all(Cstr source_file, Cstr directory, char* compiler, char* flags[], Cstr extension, char* target_directory){
+int compile_all(Cstr directory, char* compiler, char* flags[], Cstr extension, char* target_directory){
   struct stat fi;
   struct dirent *dirent;
   DIR* Dir;
@@ -195,35 +195,20 @@ int compile_all(Cstr source_file, Cstr directory, char* compiler, char* flags[],
 		char* command[]={compiler, dname, "-o", cwd, NULL};
 		exec(command);  
 	      if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
-	      printf("executed:{%s} flags:{%s} source:{%s} output:{%s}\n", command[0], *flags, command[1], command[3]); 
+	      printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]); 
 	      }
 	      }
-	    char* command[]={compiler, *flags, dname, "-o", cwd, NULL};
-	    if(is_path1_modified_after_path2(source_file, cwd)){
-	      printf("%s\n", source_file);
-	      exec(command);
-	      if(stat(command[2], &fi)==0 && stat(command[4], &fi)==0){
-	      printf("executed:{%s} flags:{%s} source:{%s} output:{%s}\n", command[0], *flags, command[1], command[3]); 
-	      }
-	    }
-	    /* 
-	    else{
-	      printf("file:{%s} or {%s} doesnt exist\n", command[1], command[3]);
-	    }
-	    */
-	    free(cwd);
+	      free(cwd);
 	  }
 	  if(strcmp(directory, ".")==0){
 	    char* cwd=base(dirent->d_name);
 	    char* command[]={compiler, dirent->d_name, "-o", cwd, NULL};
-	    if(is_path1_modified_after_path2(dirent->d_name, cwd)){
 	      exec(command);
 	      if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
 		printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]);
 	      } else{
 		printf("file:{%s} or {%s} doesnt exist\n", command[1], command[3]);	
 	      }
-	    }
 	  } 
 	}
       }
