@@ -10,7 +10,7 @@ int MKDIR(const char* path);
 int RMDIR(const char *path);
 int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path);
 int compile_targets(const char* files[], const char* compiler, const char* extension);
-int compile_all(const char* directory, const char* compiler, const char* extension);
+int compile_all(Cstr source_file, Cstr directory, char* compiler, char* flags[], Cstr extension, char* target_directory)
 #endif
 
 #ifdef COMPILATION_IMPLEMENTATION
@@ -24,6 +24,7 @@ int compile_all(const char* directory, const char* compiler, const char* extensi
 #include <sys/stat.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <assert.h>
 
 typedef const char* Cstr;
 
@@ -180,42 +181,35 @@ int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_dir
 	    char* dname=malloc(sizeof(dname) * PATH_MAX);;
 	    char buff[PATH_MAX];
 	    strcat(cwd, target_directory);
-	    printf("cwd:%s\n", cwd);
+	    // printf("cwd:%s\n", cwd);
 	    strcat(cwd, "/");
-	    printf("cwd:%s\n", cwd);
+	    // printf("cwd:%s\n", cwd);
 	    strcat(cwd, base(dirent->d_name));
-	    printf("cwd:%s\n", cwd);
-	      printf("name:%s cwd:%s\n", dirent->d_name, cwd);
+	    // printf("cwd:%s\n", cwd);
+	      // printf("name:%s cwd:%s\n", dirent->d_name, cwd);
 	      strcat(dname, getcwd(buff, sizeof(buff)));
 	      strcat(dname, "/");
-	      strcat(dname, target_directory);
+	      strcat(dname, directory);
 	      strcat(dname, "/");
 	      strcat(dname, dirent->d_name);
-	    char* command[]={compiler, dname, "-o", cwd, NULL};
-	    if(is_path1_modified_after_path2(dname, cwd)){
-	      exec(command);
+	      char* command[]={compiler, dname, "-o", cwd, NULL};
+	      printf("dname:{%s} cwd:{%s}\n", dname, cwd);
+	      exec(command);  
 	      if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
 	      printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]); 
 	      }
-	    }
-	    /* 
-	    else{
-	      printf("file:{%s} or {%s} doesnt exist\n", command[1], command[3]);
-	    }
-	    */
-	    free(cwd);
+	      free(cwd);
 	  }
 	  if(strcmp(directory, ".")==0){
 	    char* cwd=base(dirent->d_name);
 	    char* command[]={compiler, dirent->d_name, "-o", cwd, NULL};
-	    if(is_path1_modified_after_path2(dirent->d_name, cwd)){
+	      printf("d_name:{%s} cwd:{%s}\n", dirent->d_name, cwd);
 	      exec(command);
 	      if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
 		printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]);
 	      } else{
 		printf("file:{%s} or {%s} doesnt exist\n", command[1], command[3]);	
 	      }
-	    }
 	  } 
 	}
       }
@@ -229,7 +223,13 @@ int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_dir
   return 0;
 }
 
-
-/* TODO add optional recursion to compile_all */
+int GO_REBUILD(char* file,char** argv){
+  assert(file!=NULL && argv!=NULL);
+  if(is_path1_modified_after_path2(file, argv[0])){
+  char* command[]={"cc", "-o", argv[0], file, NULL};
+  exec(command); 
+  }
+  return 0;
+}
 
 #endif

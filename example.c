@@ -1,13 +1,13 @@
 #define COMPILATION_IMPLEMENTATION
 #include "comp.h"
 
-int main(void){
+int main(int argc, char** argv){
 // MKDIR("hello");
 // compile_all(".", "gcc", ".c", "bin");
-if(is_path1_modified_after_path2("example.c", "bin/example")){
-  printf("YES\n");
-}
-
-compile_all("tests", "tcc", ".c", "tests");
+GO_REBUILD(__FILE__, argv);
+compile_all(".", "tcc", ".c", "tests");
+compile_all("tests", "tcc",".c", "tests");
+compile_all(".", "tcc", ".", "bin");
+printf("hello sailor\n");
 return 0;
 }
