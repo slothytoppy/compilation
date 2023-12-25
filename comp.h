@@ -4,7 +4,8 @@ int len(const char* str1);
 char* ext(const char* file);
 char* base(const char* path);
 int IS_PATH_DIR(const char* path);
-int IS_PATH_FILE(const char* file);
+int IS_PATH_FILE(const char* path);
+int IS_PATH_EXIST(const char* path);
 int MKFILE(const char* file);
 int RMFILE(const char* file);
 int MKDIR(const char* path);
@@ -83,42 +84,54 @@ int IS_PATH_DIR(Cstr path){
   struct stat fi;
   if(stat(path, &fi)<0){
     if(errno==ENOENT) 
-      fprintf(stderr, "could not open %s", path);
+      fprintf(stderr, "could not open %s\n", path);
     perror("errno");
     return ENOENT;
   } else return S_ISDIR(fi.st_mode);
 }
 
-int IS_PATH_FILE(Cstr file){
+int IS_PATH_FILE(Cstr path){
  struct stat fi;
-  if(stat(file, &fi)<0){
-    if(errno==ENOENT) 
-      fprintf(stderr, "could not open %s", file);
-    perror("errno");
-    return ENOENT;
-  } else return S_ISREG(fi.st_mode);
+  if(stat(path, &fi)<0){
+    if(errno==ENOENT){
+      fprintf(stderr, "%s doesnt exist\n", path);
+    }
+    return 0;
+  } 
+  return 1;
+}
+
+int IS_PATH_EXIST(Cstr path){
+struct stat fi;
+  if(stat(path, &fi)<0){
+  if(errno==ENOENT){
+    fprintf(stderr, "%s doesnt exist\n", path);
+  }  
+  return 0;
+  } 
+  return 1;
 }
 
 int MKFILE(const char* file){
   struct stat fi;
   if(stat(file, &fi)!=0){
     if(creat(file, 0644)<0){
-      fprintf(stderr, "mkfile error:%s %d", file, errno);
-      return -1;
+      fprintf(stderr, "mkfile error:%s %d\n", file, errno);
+      return 0;
     }
   }
-  return 0;
+  return 1;
 }
 
 int RMFILE(const char* file){
   struct stat fi;
   if(stat(file, &fi)!=0){
     if(unlink(file)<0){
-      fprintf(stderr, "rmfile error:%s %d", file, errno);
-      return -1;
+      fprintf(stderr, "rmfile error:%s %d\n", file, errno);
+      return 0;
     }
   }
-  return 0;
+  return 1;
 }
 
 int MKDIR(const char* path){
@@ -126,22 +139,22 @@ int MKDIR(const char* path){
   if(stat(path, &fi)!=0){
     mode_t perms = S_IRWXU | S_IRWXG | S_IRWXO;
     if(mkdir(path, perms)<0){ 
-      fprintf(stderr, "mkdir error:%s %d", path, errno);
-      return -1;
+      fprintf(stderr, "mkdir error:%s %d\n", path, errno);
+      return 0;
     }
   }
-  return 0;
+  return 1;
 }
 
 int RMDIR(const char *path){
   struct stat fi;
   if(stat(path, &fi)!=0){
     if(rmdir(path)<0){
-      fprintf(stderr, "rmdir error:%s %d", path, errno);
-      return -1;
+      fprintf(stderr, "rmdir error:%s %d\n", path, errno);
+      return 0;
     }
   }
-  return 0;
+  return 1;
 }
 
 int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path){
@@ -172,7 +185,7 @@ int compile_targets(char* files[], char* compiler, Cstr extension){
       exec(command);
     }
   }
-  return 0;
+  return 1;
 }
 
 int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_directory){
@@ -181,7 +194,7 @@ int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_dir
   DIR* Dir;
   if(directory==NULL || compiler==NULL || extension==NULL || target_directory==NULL){
     fprintf(stderr, "directory, compiler, extension or executable path was null\n"); 
-    return -1;
+    return 0;
   }
   Dir=opendir(directory);
   if(Dir){
@@ -232,10 +245,10 @@ int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_dir
   }
   else if(ENOENT==errno){
     closedir(Dir);
-    return -1;
+    return 0;
   }
   closedir(Dir);
-  return 0;
+  return 1;
 }
 
 int GO_REBUILD(char* file,char** argv){
@@ -245,7 +258,7 @@ int GO_REBUILD(char* file,char** argv){
   exec(command); 
   printf("executed:%s source:%s binary:%s\n", command[0], command[3], command[2]); 
   }
-  return 0;
+  return 1;
 }
 
 #endif
