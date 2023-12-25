@@ -209,19 +209,19 @@ int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_dir
 	    char* dname=malloc(sizeof(dname) * PATH_MAX);;
 	    char buff[PATH_MAX];
 	    strcat(cwd, target_directory);
-	    // printf("cwd:%s\n", cwd);
+	    printf("cwd:%s\n", cwd);
 	    strcat(cwd, "/");
-	    // printf("cwd:%s\n", cwd);
+	    printf("cwd:%s\n", cwd);
 	    strcat(cwd, base(dirent->d_name));
-	    // printf("cwd:%s\n", cwd);
-	      // printf("name:%s cwd:%s\n", dirent->d_name, cwd);
+	    printf("cwd:%s\n", cwd);
+	      printf("name:%s cwd:%s\n", dirent->d_name, cwd);
 	      strcat(dname, getcwd(buff, sizeof(buff)));
 	      strcat(dname, "/");
 	      strcat(dname, directory);
 	      strcat(dname, "/");
 	      strcat(dname, dirent->d_name);
 	      char* command[]={compiler, dname, "-o", cwd, NULL};
-	      // printf("dname:{%s} cwd:{%s}\n", dname, cwd);
+	      printf("dname:{%s} cwd:{%s}\n", dname, cwd);
 	      exec(command);  
 	      if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
 	      printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]); 
