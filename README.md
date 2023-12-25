@@ -4,4 +4,4 @@ start date: 12/17/23
 extension that the program looks for and compiles as well as the ability to use different compilers for files with different extensions</li>
 <li>you only need to compile your build recipe once, every other time you can just do ./recipe and it will recompile itself and then run itself but to do this you have to use rebuild_urself at the top of your program.</li>
 </ul>
-![image](img/POC.png)
+![](img/POC.png)
