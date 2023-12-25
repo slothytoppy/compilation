@@ -3,15 +3,16 @@ int exec(char* args[]);
 int len(const char* str1);
 char* ext(const char* file);
 char* base(const char* path);
-int IS_FILE_DIR(const char* path);
-int IS_FILE_FILE(const char* file);
+int IS_PATH_DIR(const char* path);
+int IS_PATH_FILE(const char* file);
 int MKFILE(const char* file);
 int RMFILE(const char* file);
 int MKDIR(const char* path);
 int RMDIR(const char *path);
 int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path);
 int compile_targets(const char* files[], const char* compiler, const char* extension);
-int compile_all(Cstr source_file, Cstr directory, char* compiler, char* flags[], Cstr extension, char* target_directory)
+int compile_all(const char* source_file, const char* directory, char* compiler, char* flags[], const char* extension, char* target_directory);
+int GO_REBUILD(char* file,char** argv);
 #endif
 
 #ifdef COMPILATION_IMPLEMENTATION
@@ -78,7 +79,7 @@ char* base(Cstr file){
   return retStr;
 }
 
-int IS_FILE_DIR(Cstr path){
+int IS_PATH_DIR(Cstr path){
   struct stat fi;
   if(stat(path, &fi)<0){
     if(errno==ENOENT) 
@@ -88,8 +89,14 @@ int IS_FILE_DIR(Cstr path){
   } else return S_ISDIR(fi.st_mode);
 }
 
-int IS_FILE_FILE(Cstr file){
-  return file;
+int IS_PATH_FILE(Cstr file){
+ struct stat fi;
+  if(stat(file, &fi)<0){
+    if(errno==ENOENT) 
+      fprintf(stderr, "could not open %s", file);
+    perror("errno");
+    return ENOENT;
+  } else return S_ISREG(fi.st_mode);
 }
 
 int MKFILE(const char* file){
@@ -182,7 +189,7 @@ int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_dir
       if(strlen(dirent->d_name)>1 && strcmp(dirent->d_name, ".")!=0 && strlen(dirent->d_name)>2 && strcmp(dirent->d_name, "..")!=0){
 	if(strcmp(ext(dirent->d_name), extension)==0){
 	  if(strcmp(directory, ".")!=0){
-	    if(!IS_FILE_DIR(directory) && !IS_FILE_DIR(target_directory)){
+	    if(IS_PATH_FILE(directory) && IS_PATH_FILE(target_directory)){
 	    fprintf(stderr, "%s or %s isnt a directory\n", directory, target_directory);
 	    }
 	    char* cwd=malloc(sizeof(cwd) * PATH_MAX);;
