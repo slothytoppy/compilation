@@ -12,7 +12,7 @@ int MKDIR(const char* path);
 int RMDIR(const char *path);
 int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path);
 int compile_targets(const char* files[], const char* compiler, const char* extension);
-int compile_all(const char* source_file, const char* directory, char* compiler, char* flags[], const char* extension, char* target_directory);
+int compile_dir(const char* source_file, const char* directory, char* compiler, char* flags[], const char* extension, char* target_directory);
 int GO_REBUILD(char* file,char** argv);
 #endif
 
@@ -39,14 +39,14 @@ int exec(char* args[]){
   } 
   if(id<0){
     printf("forking failed");
-    return -1;
+    return 0;
   }
   wait(&child_status);
-  return 0;
+  return 1;
 }
 
 int len(Cstr str1){
-  if(str1==NULL) return -1;
+  if(str1==NULL) return 0;
   int i=0;
   while(*str1++){
     i++;
@@ -86,12 +86,13 @@ int IS_PATH_DIR(Cstr path){
     if(errno==ENOENT) 
       fprintf(stderr, "could not open %s\n", path);
     perror("errno");
-    return ENOENT;
-  } else return S_ISDIR(fi.st_mode);
+    return 0;
+  }
+  return 1;
 }
 
 int IS_PATH_FILE(Cstr path){
- struct stat fi;
+  struct stat fi;
   if(stat(path, &fi)<0){
     if(errno==ENOENT){
       fprintf(stderr, "%s doesnt exist\n", path);
@@ -102,12 +103,12 @@ int IS_PATH_FILE(Cstr path){
 }
 
 int IS_PATH_EXIST(Cstr path){
-struct stat fi;
+  struct stat fi;
   if(stat(path, &fi)<0){
-  if(errno==ENOENT){
-    fprintf(stderr, "%s doesnt exist\n", path);
-  }  
-  return 0;
+    if(errno==ENOENT){
+      fprintf(stderr, "%s doesnt exist\n", path);
+    }  
+    return 0;
   } 
   return 1;
 }
@@ -188,75 +189,110 @@ int compile_targets(char* files[], char* compiler, Cstr extension){
   return 1;
 }
 
-int compile_all(Cstr directory, char* compiler, Cstr extension, char* target_directory){
-  struct stat fi;
-  struct dirent *dirent;
-  DIR* Dir;
-  if(directory==NULL || compiler==NULL || extension==NULL || target_directory==NULL){
-    fprintf(stderr, "directory, compiler, extension or executable path was null\n"); 
-    return 0;
+int compile_dir(char* origin, char* destination, char* compiler, Cstr extension){
+  if(origin==NULL || destination==NULL || compiler==NULL || ext==NULL){
+    fprintf(stderr, "origin, destination, compiler, or extension was null\n");
   }
-  Dir=opendir(directory);
-  if(Dir){
-    while((dirent=readdir(Dir))!=NULL){
-      if(strlen(dirent->d_name)>1 && strcmp(dirent->d_name, ".")!=0 && strlen(dirent->d_name)>2 && strcmp(dirent->d_name, "..")!=0){
+  struct dirent *dirent;
+  DIR* source_dir;
+  DIR* binary_dir;
+  source_dir=opendir(origin);
+  if(source_dir){
+    while((dirent=readdir(source_dir))!=NULL){
+      if(strcmp(dirent->d_name, ".")!=0 && strcmp(dirent->d_name, "..")!=0){
 	if(strcmp(ext(dirent->d_name), extension)==0){
-	  if(strcmp(directory, ".")!=0){
-	    if(IS_PATH_FILE(directory) && IS_PATH_FILE(target_directory)){
-	    fprintf(stderr, "%s or %s isnt a directory\n", directory, target_directory);
-	    }
-	    char* cwd=malloc(sizeof(cwd) * PATH_MAX);;
-	    char* dname=malloc(sizeof(dname) * PATH_MAX);;
-	    char buff[PATH_MAX];
-	    strcat(cwd, target_directory);
-	    printf("cwd:%s\n", cwd);
-	    strcat(cwd, "/");
-	    printf("cwd:%s\n", cwd);
-	    strcat(cwd, base(dirent->d_name));
-	    printf("cwd:%s\n", cwd);
-	      printf("name:%s cwd:%s\n", dirent->d_name, cwd);
-	      strcat(dname, getcwd(buff, sizeof(buff)));
-	      strcat(dname, "/");
-	      strcat(dname, directory);
-	      strcat(dname, "/");
-	      strcat(dname, dirent->d_name);
-	      char* command[]={compiler, dname, "-o", cwd, NULL};
-	      printf("dname:{%s} cwd:{%s}\n", dname, cwd);
-	      exec(command);  
-	      if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
-	      printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]); 
-	      }
-	      free(cwd);
+	  if(strcmp(origin, ".")==0 && strcmp(destination, ".")==0){
+	  char* command[]={compiler, dirent->d_name, "-o", base(dirent->d_name), NULL};
+	  printf("executed:%s source:%s binary:%s\n", command[0], command[1], command[3]);
+	  exec(command);
 	  }
-	  if(strcmp(directory, ".")==0){
-	    char* cwd=base(dirent->d_name);
-	    char* command[]={compiler, dirent->d_name, "-o", cwd, NULL};
-	      // printf("d_name:{%s} cwd:{%s}\n", dirent->d_name, cwd);
-	      exec(command);
-	      if(stat(command[1], &fi)==0 && stat(command[3], &fi)==0){
-		printf("executed:{%s} source:{%s} output:{%s}\n", command[0], command[1], command[3]);
-	      } else{
-		printf("file:{%s} or {%s} doesnt exist\n", command[1], command[3]);	
-	      }
-	  } 
+	  if(strcmp(origin, ".")==0 && strcmp(destination, ".")!=0){
+	  char* origin_path=calloc(1, PATH_MAX);
+	  strcat(origin_path, destination);
+	  char* dest_path=calloc(1, PATH_MAX);
+	  strcat(dest_path, destination);
+	  printf("path1:%s\n", dest_path);
+	  strcat(dest_path, "/");
+	  printf("path:%s\n", dest_path);
+	  strcat(dest_path, base(dirent->d_name));
+	  printf("path:%s\n", dest_path);
+	  char* command[]={compiler, dirent->d_name, "-o", dest_path, NULL};
+	  printf("executed:%s source:%s binary:%s\n", command[0], command[1], command[3]);
+	  exec(command);
+	  }
+	  if(strcmp(origin, ".")!=0 && strcmp(destination, ".")==0){
+	  char* origin_path=calloc(1, PATH_MAX);
+	  char* dest_path=calloc(1, PATH_MAX);
+	  strcat(origin_path, origin);
+	  strcat(dest_path, origin);
+	  strcat(dest_path, "/");
+	  strcat(dest_path, base(dirent->d_name));
+	  printf("origin:%s\n", dest_path);
+	  printf("path:%s\n", origin_path);
+	  strcat(origin_path, "/");
+	  printf("path:%s\n", origin_path);
+	  strcat(origin_path, dirent->d_name);
+	  printf("path:%s\n", origin_path);
+	  char* command[]={compiler, origin_path, "-o", dest_path, NULL};
+	  printf("executed:%s source:%s binary:%s\n", command[0], command[1], command[3]);
+	  exec(command);
+	  }
+	  if(strcmp(origin, ".")!=0 && strcmp(destination, ".")!=0){
+	  char* dest_path=calloc(1, PATH_MAX);
+	  char* origin_path=calloc(1, PATH_MAX);
+	  strcat(dest_path, destination);
+	  strcat(origin_path, origin);
+	  strcat(dest_path, "/");
+	  strcat(origin_path, "/");
+	  strcat(dest_path, base(dirent->d_name));
+	  strcat(origin_path, dirent->d_name);
+	  char* command[]={compiler, origin_path, "-o", dest_path, NULL};
+	  printf("executed:%s source:%s binary:%s\n", command[0], command[1], command[3]);
+	  exec(command);
+	  }
 	}
       }
     }
   }
-  else if(ENOENT==errno){
-    closedir(Dir);
-    return 0;
-  }
-  closedir(Dir);
   return 1;
 }
+
+/* 
+int dir_compile_all(DIR* origin, DIR* destination, char* compiler, Cstr ext){
+  if(origin==NULL || compiler==NULL || ext==NULL){ // destination isnt checked because if its null its value is assumed to be origin
+  fprintf(stderr, "origin, compiler, or extension was null\n");
+  }
+  struct dirent *dirent;
+    while((dirent=readdir(origin))!=NULL){
+      if(strcmp(dirent->d_name, ".")!=0 && strcmp(dirent->d_name, "..")!=0){
+	if(strcmp(ext(dirent->d_name), extension)==0){
+	  if((strcmp(origin, "."==0) && (strcmp(destination, "."))==0){
+	    char* command[]={compiler, dirent->d_name, "-o", base(dirent->d_name), NULL);
+	    exec(command);
+	  } else{
+	      if(strcmp(origin, ".")==0){
+		if(strcmp(destination, ".")!=0){
+	      char* cwd=calloc(1, sizeof(char*));
+	      char buff[PATH_MAX];
+	      strcat(cwd, destination);
+	      strcat(cwd, "/");
+	      strcat(cwd, base(dirent->d_name));
+		}
+	      }
+	  }
+	}
+      }
+    }
+  }
+}
+*/
 
 int GO_REBUILD(char* file,char** argv){
   assert(file!=NULL && argv!=NULL);
   if(is_path1_modified_after_path2(file, argv[0])){
-  char* command[]={"cc", "-o", argv[0], file, NULL};
-  exec(command); 
-  printf("executed:%s source:%s binary:%s\n", command[0], command[3], command[2]); 
+    char* command[]={"cc", "-o", argv[0], file, NULL};
+    exec(command); 
+    printf("executed:%s source:%s binary:%s\n", command[0], command[3], command[2]); 
   }
   return 1;
 }
