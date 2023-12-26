@@ -1,6 +1,6 @@
 #define COMPILATION_IMPLEMENTATION
 // #define DEBUG //if DEBUG is defined then debug info will be printed from compile commands, more functions will have DEBUG support soon
-#include "comp.h"
+#include "nomake.h"
 
 int main(int argc, char** argv){
 GO_REBUILD(argc, argv);

@@ -1,5 +1,5 @@
 #define COMPILATION_IMPLEMENTATION
-#include "comp.h"
+#include "nomake.h"
 
 int main(int argc, char* argv[]){
 GO_REBUILD(argc, argv);
