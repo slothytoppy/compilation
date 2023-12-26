@@ -9,5 +9,7 @@ printf("yes\n");
 compile_dir(".", "bin","tcc", ".c");
 compile_dir("tests", ".", "tcc",".c");
 printf("hello yes!\n");
+char* command[]={"test", "build", NULL};
+run(command);
 return 0;
 }

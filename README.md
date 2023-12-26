@@ -9,4 +9,11 @@ you will need to use ``#define COMPILATION_IMPLEMENTATION`` to use the functions
 
 i have functions return 1 because apparently 1 is true and 0 is false for if(condition) or if(condition1 && condition2) they have to return 1 to be evaluated as true but you can bypass it with if((condition==0)
 
+
 ![](img/POC.png)
+
+
+<ul> <li>with my project you can even execute a program that takes cli arguments by calling run_args(char* pathname[]), you can also execute a program that takes no arguments with run(char* pathname)</li></ul>
+
+
+![](img/running_file_from_recipe.png)
