@@ -10,7 +10,7 @@ I will try to add recursion so that people can use this and compile all the file
 <p> this is a small build recipe, the recipe will rebuild itself using GO_REBUILD, then the first compile_dir command does this: it looks for files in the current directory or ".", then it will put the binary in "bin", it will use tcc as a compiler then and it will check for files with a ".c" extension to compile files</p>
 
 
-![](img/POC.png)
+![](img/build_recipe.png)
 
 
 <p>this image is me using my library to compile a program and to then execute a file</p>
