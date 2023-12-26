@@ -1,5 +1,5 @@
 start date: 12/17/23
-<p>i dont have a name for this build tool yet. 
+<p>the name of this build tool is NoMake™. 
 This build tool is simple and can be used to compile multiple directories, you can even call different compilers that look for a different extension in the same directory!
 I will try to add recursion so that people can use this and compile all the files inside of a directory I will also try to add windows support in the future.</p>
 
