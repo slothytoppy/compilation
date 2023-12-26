@@ -14,6 +14,7 @@ int MKDIR(const char* path);
 int RMDIR(const char *path);
 int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path);
 int print_exec(char* args[]);
+int debug_print(char* info, char* msg);
 int compile_targets(const char* files[], const char* compiler, const char* extension);
 int compile_dir(const char* source_file, const char* directory, char* compiler, char* flags[], const char* extension, char* target_directory);
 int GO_REBUILD(char* file,char** argv);
@@ -32,6 +33,12 @@ int GO_REBUILD(char* file,char** argv);
 #include <fcntl.h>
 #include <assert.h>
 
+#ifdef DEBUG
+#define debug(status, msg) debug_print(status, msg)
+#else 
+#define debug(status, msg) // is neccesary so that if DEBUG isnt defined it does nothing
+#endif // DEBUG
+
 typedef const char* Cstr;
 
 int exec(char* args[]){
@@ -49,7 +56,7 @@ int exec(char* args[]){
 }
 
 int run(char* pathname){
-  char* command[]={pathname, NULL}
+  char* command[]={pathname, NULL};
   pid_t id=fork();
   int child_status;
   if(id==0) execv(command[0], command);
@@ -207,6 +214,11 @@ printf("executed:%s source:%s binary:%s\n", args[0], args[1], args[3]);
 return 1;
 }
 
+int debug_print(char* status, char* msg){ 
+  printf("[%s] %s\n", status, msg); 
+  return 1;
+}
+
 int compile_targets(char* files[], char* compiler, Cstr extension){
   if(files==NULL || compiler==NULL || extension==NULL){
     fprintf(stderr, "list of files, compiler or extension was null\n");
@@ -242,16 +254,15 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
 	  if(strcmp(origin, ".")==0 && strcmp(destination, ".")==0){
 	  char* command[]={compiler, dirent->d_name, "-o", base(dirent->d_name), NULL};
 	  print_exec(command);
+	  debug("INFO", dirent->d_name);
 	  exec(command);
 	  }
 	  if(strcmp(origin, ".")==0 && strcmp(destination, ".")!=0){
 	  strcat(origin_path, destination);
 	  strcat(dest_path, destination);
-	  // printf("path1:%s\n", dest_path);
 	  strcat(dest_path, "/");
-	  // printf("path:%s\n", dest_path);
 	  strcat(dest_path, base(dirent->d_name));
-	  // printf("path:%s\n", dest_path);
+	  debug("INFO", dest_path);
 	  char* command[]={compiler, dirent->d_name, "-o", dest_path, NULL};
 	  print_exec(command);
 	  exec(command);
@@ -261,23 +272,26 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
 	  strcat(dest_path, origin);
 	  strcat(dest_path, "/");
 	  strcat(dest_path, base(dirent->d_name));
-	  // printf("origin:%s\n", dest_path);
-	  // printf("path:%s\n", origin_path);
+	  debug("INFO", dest_path);
 	  strcat(origin_path, "/");
-	  // printf("path:%s\n", origin_path);
+	  debug("INFO", dest_path);
 	  strcat(origin_path, dirent->d_name);
-	  // printf("path:%s\n", origin_path);
+	  debug("INFO", dest_path);
 	  char* command[]={compiler, origin_path, "-o", dest_path, NULL};
 	  print_exec(command);
 	  exec(command);
 	  }
 	  if(strcmp(origin, ".")!=0 && strcmp(destination, ".")!=0){
 	  strcat(dest_path, destination);
+	  debug("INFO", dest_path);
 	  strcat(dest_path, "/");
+	  debug("INFO", dest_path);
 	  strcat(origin_path, origin);
 	  strcat(origin_path, "/");
+	  debug("INFO", dest_path);
 	  strcat(dest_path, base(dirent->d_name));
 	  strcat(origin_path, dirent->d_name);
+	  debug("INFO", dest_path);
 	  char* command[]={compiler, origin_path, "-o", dest_path, NULL};
 	  print_exec(command);
 	  exec(command);
@@ -300,4 +314,4 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
   }										      \
 }
 
-#endif
+#endif // COMPILATION_IMPLEMENTATION

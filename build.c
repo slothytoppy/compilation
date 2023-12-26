@@ -4,7 +4,7 @@
 int main(int argc, char* argv[]){
 GO_REBUILD(argc, argv);
 if(IS_PATH_EXIST("bin")){
-char* command[]={"cc", "example.c", "-o", "bin/example", NULL};
+char* command[]={"cc", "recipe.c", "-o", "examples/recipe.c", NULL};
 exec(command);
 print_exec(command);
 } else{
