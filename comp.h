@@ -201,15 +201,15 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
     while((dirent=readdir(source_dir))!=NULL){
       if(strcmp(dirent->d_name, ".")!=0 && strcmp(dirent->d_name, "..")!=0){
 	if(strcmp(ext(dirent->d_name), extension)==0){
+	  char* dest_path=calloc(1, PATH_MAX);
+	  char* origin_path=calloc(1, PATH_MAX);
 	  if(strcmp(origin, ".")==0 && strcmp(destination, ".")==0){
 	  char* command[]={compiler, dirent->d_name, "-o", base(dirent->d_name), NULL};
 	  printf("executed:%s source:%s binary:%s\n", command[0], command[1], command[3]);
 	  exec(command);
 	  }
 	  if(strcmp(origin, ".")==0 && strcmp(destination, ".")!=0){
-	  char* origin_path=calloc(1, PATH_MAX);
 	  strcat(origin_path, destination);
-	  char* dest_path=calloc(1, PATH_MAX);
 	  strcat(dest_path, destination);
 	  printf("path1:%s\n", dest_path);
 	  strcat(dest_path, "/");
@@ -221,8 +221,6 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
 	  exec(command);
 	  }
 	  if(strcmp(origin, ".")!=0 && strcmp(destination, ".")==0){
-	  char* origin_path=calloc(1, PATH_MAX);
-	  char* dest_path=calloc(1, PATH_MAX);
 	  strcat(origin_path, origin);
 	  strcat(dest_path, origin);
 	  strcat(dest_path, "/");
@@ -238,11 +236,9 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
 	  exec(command);
 	  }
 	  if(strcmp(origin, ".")!=0 && strcmp(destination, ".")!=0){
-	  char* dest_path=calloc(1, PATH_MAX);
-	  char* origin_path=calloc(1, PATH_MAX);
 	  strcat(dest_path, destination);
-	  strcat(origin_path, origin);
 	  strcat(dest_path, "/");
+	  strcat(origin_path, origin);
 	  strcat(origin_path, "/");
 	  strcat(dest_path, base(dirent->d_name));
 	  strcat(origin_path, dirent->d_name);
@@ -287,14 +283,15 @@ int dir_compile_all(DIR* origin, DIR* destination, char* compiler, Cstr ext){
 }
 */
 
-int GO_REBUILD(char* file,char** argv){
-  assert(file!=NULL && argv!=NULL);
-  if(is_path1_modified_after_path2(file, argv[0])){
-    char* command[]={"cc", "-o", argv[0], file, NULL};
-    exec(command); 
-    printf("executed:%s source:%s binary:%s\n", command[0], command[3], command[2]); 
-  }
-  return 1;
+#define GO_REBUILD(argc, argv){    						      \
+  char* file=__FILE__;      						      	      \
+  printf("file:{%s}\n", file);     						      \
+  assert(file!=NULL && argv!=NULL); 						      \
+  if(is_path1_modified_after_path2(file, argv[0])){				      \
+    char* command[]={"cc", "-o", argv[0], file, NULL};				      \
+    exec(command); 								      \
+    printf("executed:%s source:%s binary:%s\n", command[0], command[3], command[2]);  \
+  }										      \
 }
 
 #endif

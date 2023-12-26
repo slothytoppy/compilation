@@ -2,9 +2,12 @@
 #include "comp.h"
 
 int main(int argc, char** argv){
-// GO_REBUILD(__FILE__, argv);
+GO_REBUILD(argc, argv);
+if(IS_PATH_DIR("bin")){
+printf("yes\n");
+}
 compile_dir(".", "bin","tcc", ".c");
 compile_dir("tests", ".", "tcc",".c");
-printf("hello world!\n");
+printf("hello yes!\n");
 return 0;
 }
