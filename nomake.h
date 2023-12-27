@@ -1,4 +1,6 @@
 #ifndef COMPILATION_IMPLEMENTATION
+int debug_print(char* status, char* msg);
+int debug_print_array(char* status, char** msg);
 int exec(char* args[]);
 int run(char* pathname)
 int run_args(char* pathname[]);
@@ -14,8 +16,6 @@ int MKDIR(const char* path);
 int RMDIR(const char *path);
 int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path);
 int print_exec(char* args[]);
-int debug_print(char* info, char* msg);
-int debug_print_array(char* info, char* msg[]);
 int compile_file(const char* file, char* compiler, const char* extension);
 int compile_targets(const char* files[], const char* compiler, const char* extension);
 int compile_dir(char* origin, char* destination, char* compiler, const char* extension);
