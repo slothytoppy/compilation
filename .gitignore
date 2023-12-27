@@ -3,7 +3,6 @@ test
 test.c
 bin/
 .git
-tests/
 build/
 examples/git
 examples/recipe

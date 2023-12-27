@@ -16,7 +16,7 @@ int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path);
 int print_exec(char* args[]);
 int debug_print(char* info, char* msg);
 int debug_print_array(char* info, char* msg[]);
-int compile_file(const char* file, const char* destination, char* compiler, const char* extension);
+int compile_file(const char* file, char* compiler, const char* extension);
 int compile_targets(const char* files[], const char* compiler, const char* extension);
 int compile_dir(char* origin, char* destination, char* compiler, const char* extension);
 #endif
@@ -37,12 +37,32 @@ int compile_dir(char* origin, char* destination, char* compiler, const char* ext
 #ifdef DEBUG
 #define debug(status, msg) debug_print(status, msg)
 #define print_files(file1, file2) printf("%s && %s\n", file1, file2)
+#define print_source() debug("SOURCE", __FILE__)
 #else 
 #define debug(status, msg) // is neccesary so that if DEBUG isnt defined it does nothing
 #define print_files(file1, file2)
+#define print_source(){            \
+  char* file=__FILE__;             \
+  printf("[SOURCE] %s\n", file);   \
+}
 #endif // DEBUG
-
 typedef const char* Cstr;
+
+int debug_print(char* status, char* msg){ 
+  printf("[%s] %s\n", status, msg); 
+  return 1;
+}
+
+int debug_print_array(char* status, char** msg){
+  int i;
+  size_t sz=sizeof(msg)/sizeof(char*);
+  printf("[%s] ", status);
+  for(i=0; i<sz; i++){
+    printf("%s ", *msg[i]);
+  }
+  printf("\n");
+  return 1;
+}
 
 int exec(char* args[]){
   pid_t id=fork();
@@ -150,15 +170,12 @@ int IS_PATH_FILE(Cstr path){
 int IS_PATH_EXIST(Cstr path){
   struct stat fi;
   if(stat(path, &fi)<0){
-    if(errno==ENOENT){
-      fprintf(stderr, "%s doesnt exist\n", path);
-    }  
     return 0;
   } 
   return 1;
 }
 
-int MKFILE(const char* file){
+int MKFILE(char* file){
   struct stat fi;
   if(stat(file, &fi)!=0){
     if(creat(file, 0644)<0){
@@ -166,21 +183,27 @@ int MKFILE(const char* file){
       return 0;
     }
   }
+  if(IS_PATH_EXIST(file)){
+  debug("CREATED", file);
+  }
   return 1;
 }
 
-int RMFILE(const char* file){
+int RMFILE(char* file){
   struct stat fi;
-  if(stat(file, &fi)!=0){
+  if(stat(file, &fi)==0){
     if(unlink(file)<0){
       fprintf(stderr, "rmfile error:%s %d\n", file, errno);
       return 0;
     }
   }
+  if(!IS_PATH_EXIST(file)){
+  debug("REMOVED", file);
+  }
   return 1;
 }
 
-int MKDIR(const char* path){
+int MKDIR(char* path){
   struct stat fi;
   if(stat(path, &fi)!=0){
     mode_t perms = S_IRWXU | S_IRWXG | S_IRWXO;
@@ -189,17 +212,19 @@ int MKDIR(const char* path){
       return 0;
     }
   }
+  debug("CREATED DIR", path);
   return 1;
 }
 
-int RMDIR(const char *path){
+int RMDIR(char *path){
   struct stat fi;
-  if(stat(path, &fi)!=0){
+  if(stat(path, &fi)==0){
     if(rmdir(path)<0){
       fprintf(stderr, "rmdir error:%s %d\n", path, errno);
       return 0;
     }
   }
+  debug("REMOVE DIR", path);
   return 1;
 }
 
@@ -221,35 +246,29 @@ int print_exec(char* args[]){
   return 1;
 }
 
-int debug_print(char* status, char* msg){ 
-  printf("[%s] %s\n", status, msg); 
-  return 1;
-}
-
-int debug_print_array(char* status, char** msg){
-  int i;
-  size_t sz=sizeof(msg)/sizeof(char*);
-  printf("[%s] ", status);
-  for(i=0; i<sz; i++){
-    printf("%s ", *msg[i]);
-  }
-  printf("\n");
-  return 1;
-} 
-
-int compile_file(char* file, char* destination, char* compiler, const char* extension){
-if(file==NULL || destination==NULL || compiler==NULL || extension==NULL){
+int compile_file(char* file, char* compiler, const char* extension){
+if(file==NULL || compiler==NULL || extension==NULL){
     fprintf(stderr, "file, destination, compiler or extension was null\n");
     return 0;
   }
-  if(strcmp(file, ".")==0 || strcmp(destination, ".")==0){
+  if(strcmp(file, ".")==0){
   fprintf(stderr, "file and destination can not be only a dot\n");
   return 0;
   }
   struct stat fi;
-  char* command[]={compiler, file, "-o", destination, NULL};
+  if(strcmp(ext(file), extension)==0){
+  char* command[]={compiler, file, "-o", base(file), NULL};
   exec(command); 
   print_exec(command);
+  }
+  else{
+  fprintf(stderr, "%s doesnt have the right extension\n", file);
+  return 0;
+  }
+  if(stat(base(file), &fi)!=0){
+  fprintf(stderr, "%s wasnt compiled correctly\n", base(file));
+  return 0;
+  }
   return 1;
 }
 
@@ -289,12 +308,11 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
 	  if(strcmp(origin, destination)==0){
 	    char* command[]={compiler, "-o", base(dirent->d_name), dirent->d_name, NULL};
 	    exec(command);
+	    debug("COMPILED", command[3]);
+	    debug("BINARY", command[2]);
+          printf("finished compiling %s %s\n", command[3], command[2]);
 	  }
 	  else{
-	    if(strcmp(origin, ".")==0 && strcmp(destination, ".")==0){
-	    fprintf(stderr, "origin and destination cant be \".\"\n");
-	    return 0;
-	    }
 	    if(strcmp(origin, ".")==0){
 	    strcat(origin_path, dirent->d_name);	
 	    debug("ORIGIN:dot", origin_path);
@@ -329,6 +347,9 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
       }
     }
   }
+  if(strcmp(origin, destination)!=0){
+  printf("finished compiling %s %s\n", origin, destination);
+  }
   return 1;
 }
 
@@ -338,9 +359,8 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
   assert(file!=NULL && argc>=0); 						      \
   if(is_path1_modified_after_path2(file, argv[0])){				      \
     char* command[]={"cc", "-o", argv[0], file, NULL};				      \
-    debug("COMPILING", command[3]);                                                   \
+    printf("[COMPILING] %s\n", command[3]);                                           \
     exec(command); 								      \
   }										      \
 }
-
 #endif // COMPILATION_IMPLEMENTATION
