@@ -7,3 +7,9 @@ build/
 examples/git
 examples/recipe
 perms.txt
+build   
+tests/build
+tests/compile_targets_test
+tests/compile_test
+tests/mkdir_test
+tests/remove_file_test
