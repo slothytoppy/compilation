@@ -4,9 +4,7 @@
 int main(int argc, char* argv[]){
 GO_REBUILD(argc, argv);
 if(IS_PATH_EXIST("bin")){
-char* command[]={"cc", "examples/recipe.c", "-o", "bin/recipe", NULL};
-exec(command);
-print_exec(command);
+compile_file("examples/recipe.c", "bin/recipe", "tcc", ".c"); 
 } else{
 MKDIR("bin");
 }

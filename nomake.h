@@ -16,6 +16,7 @@ int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path);
 int print_exec(char* args[]);
 int debug_print(char* info, char* msg);
 int debug_print_array(char* info, char* msg[]);
+int compile_file(const char* file, const char* destination, char* compiler, const char* extension);
 int compile_targets(const char* files[], const char* compiler, const char* extension);
 int compile_dir(char* origin, char* destination, char* compiler, const char* extension);
 #endif
@@ -233,6 +234,22 @@ int debug_print_array(char* status, char** msg){
   printf("\n");
   return 1;
 } 
+
+int compile_file(char* file, char* destination, char* compiler, const char* extension){
+if(file==NULL || destination==NULL || compiler==NULL || extension==NULL){
+    fprintf(stderr, "file, destination, compiler or extension was null\n");
+    return 0;
+  }
+  if(strcmp(file, ".")==0 || strcmp(destination, ".")==0){
+  fprintf(stderr, "file and destination can not be only a dot\n");
+  return 0;
+  }
+  struct stat fi;
+  char* command[]={compiler, file, "-o", destination, NULL};
+  exec(command); 
+  print_exec(command);
+  return 1;
+}
 
 int compile_targets(char* files[], char* compiler, Cstr extension){
   if(files==NULL || compiler==NULL || extension==NULL){
