@@ -36,8 +36,10 @@ int compile_dir(char* origin, char* destination, char* compiler, const char* ext
 
 #ifdef DEBUG
 #define debug(status, msg) debug_print(status, msg)
+#define print_files(file1, file2) printf("%s && %s\n", file1, file2)
 #else 
 #define debug(status, msg) // is neccesary so that if DEBUG isnt defined it does nothing
+#define print_files(file1, file2)
 #endif // DEBUG
 
 typedef const char* Cstr;
@@ -295,32 +297,32 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
 	    }
 	    if(strcmp(origin, ".")==0){
 	    strcat(origin_path, dirent->d_name);	
-	    debug_print("ORIGIN:dot", origin_path);
+	    debug("ORIGIN:dot", origin_path);
 	    } else{
 	    if(strcmp(origin, ".")!=0){
 	    strcat(origin_path, origin);
 	    strcat(origin_path, "/");
 	    strcat(origin_path, dirent->d_name);
-	    debug_print("ORIGIN:path", origin_path);
+	    debug("ORIGIN:path", origin_path);
 	    }
 	    }
 	    if(strcmp(destination, ".")==0){
 	    strcat(dest_path, origin);
 	    strcat(dest_path, "/");
 	    strcat(dest_path, base(dirent->d_name));
-	    debug_print("DEST:path", dest_path);
+	    debug("DEST:path", dest_path);
 	    }
 	    if(strcmp(destination, ".")!=0){
 	    strcat(dest_path, destination);
 	    strcat(dest_path, "/");
 	    strcat(dest_path, base(dirent->d_name));
-	    debug_print("DEST:path", dest_path);
+	    debug("DEST:path", dest_path);
 	    }
 	    char* command[]={compiler, "-o", dest_path, origin_path, NULL};
-	    debug_print("COMMAND", command[0]);
-	    debug_print("binary", command[2]);
-	    debug_print("source", command[3]);
-	    printf("source:%s && binary:%s\n", origin_path, dest_path);
+	    debug("COMMAND", command[0]);
+	    debug("BINARY", command[2]);
+	    debug("SOURCE", command[3]);
+	    printf("[source]:%s [binary]:%s\n", origin_path, dest_path);
 	    exec(command);
 	  }
 	}
@@ -332,11 +334,11 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
 
 #define GO_REBUILD(argc, argv){    						      \
   char* file=__FILE__;      						      	      \
-  printf("file:{%s}\n", file);     						      \
+  debug("FILE", file);     						      	      \
   assert(file!=NULL && argc>=0); 						      \
   if(is_path1_modified_after_path2(file, argv[0])){				      \
     char* command[]={"cc", "-o", argv[0], file, NULL};				      \
-    debug_print("COMPILING", command[3]);                                             \
+    debug("COMPILING", command[3]);                                                   \
     exec(command); 								      \
   }										      \
 }
