@@ -33,13 +33,16 @@ int compile_dir(char* origin, char* destination, char* compiler, const char* ext
 #include <errno.h>
 #include <fcntl.h>
 #include <assert.h>
+#include <stdarg.h>
+#include <pthread.h>
 
 #ifdef DEBUG
-#define debug(status, msg) debug_print(status, msg)
+#define debug(status, ...) debug_print(status, __VA_ARGS__);
 #define print_files(file1, file2) printf("%s && %s\n", file1, file2)
-#define print_source() debug("SOURCE", __FILE__)
+#define print_source() printf("[SOURCE]", __FILE__)
 #else 
-#define debug(status, msg) // is neccesary so that if DEBUG isnt defined it does nothing
+// is neccesary so that if DEBUG isnt defined it does nothing
+#define debug(status, ...)
 #define print_files(file1, file2)
 #define print_source(){            \
   char* file=__FILE__;             \
@@ -48,17 +51,26 @@ int compile_dir(char* origin, char* destination, char* compiler, const char* ext
 #endif // DEBUG
 typedef const char* Cstr;
 
-int debug_print(char* status, char* msg){ 
-  printf("[%s] %s\n", status, msg); 
+int debug_print(char* status, ...){
+  va_list args;
+  va_start(args, status);
+  printf("[%s] ", status);
+  vprintf("%s " , args);
+  va_end(args);
+  printf("\n");
   return 1;
 }
 
 int debug_print_array(char* status, char** msg){
   int i;
-  size_t sz=sizeof(msg)/sizeof(char*);
+  /* 
+  va_list args;
+  va_start(args, status);
+  */
+  int sz=sizeof(**msg)/sizeof(msg[0]);
   printf("[%s] ", status);
   for(i=0; i<sz; i++){
-    printf("%s ", *msg[i]);
+    printf("%s ", msg[i]);
   }
   printf("\n");
   return 1;
@@ -78,20 +90,6 @@ int exec(char* args[]){
   return 1;
 }
 
-int run(char* pathname){
-  char* command[]={pathname, NULL};
-  pid_t id=fork();
-  int child_status;
-  if(id==0) execv(command[0], command);
-  if(id<0){
-    printf("forking failed\n");
-    return 0;
-  }
-  printf("executed:%s\n", pathname[0]);
-  wait(&child_status);
-  return 1;
-}
-
 int run_args(char* pathname[]){
   pid_t id=fork();
   int child_status;
@@ -102,9 +100,17 @@ int run_args(char* pathname[]){
     printf("forking failed\n");
     return 0;
   }
-  printf("executed:%s\n", pathname[0]);
+  debug("executed:%s\n", pathname[0]);
   wait(&child_status);
   return 1;
+}
+
+int run(char* pathname){
+char* command[]={pathname, NULL};
+if(run_args(command)){
+return 1;
+}
+return 0;
 }
 
 int len(Cstr str1){
@@ -145,7 +151,7 @@ char* base(Cstr file){
   return retStr;
 }
 
-int IS_PATH_DIR(Cstr path){
+int IS_PATH_DIR(char* path){
   struct stat fi;
   if(stat(path, &fi)<0){
     if(errno==ENOENT) 
@@ -153,10 +159,14 @@ int IS_PATH_DIR(Cstr path){
     perror("errno");
     return 0;
   }
+  if(!S_ISDIR(fi.st_mode)){
+  return 0;
+  }
+  debug("IS DIR", path); 
   return 1;
 }
 
-int IS_PATH_FILE(Cstr path){
+int IS_PATH_FILE(char* path){
   struct stat fi;
   if(stat(path, &fi)<0){
     if(errno==ENOENT){
@@ -164,14 +174,19 @@ int IS_PATH_FILE(Cstr path){
     }
     return 0;
   } 
+  if(!S_ISREG(fi.st_mode)){
+  return 0;
+  }
+  debug("IS FILE", path); 
   return 1;
 }
 
-int IS_PATH_EXIST(Cstr path){
+int IS_PATH_EXIST(char* path){
   struct stat fi;
   if(stat(path, &fi)<0){
     return 0;
   } 
+  debug("EXISTS", path);
   return 1;
 }
 
@@ -203,6 +218,32 @@ int RMFILE(char* file){
   return 1;
 }
 
+int CLEAN(char* directory, char* extension){
+if(directory==NULL || extension==NULL){
+    fprintf(stderr, "directory or compiler was null\n");
+    return 0;
+  }
+  struct dirent *dirent;
+  DIR* source_dir;
+  if(strcmp(directory, ".")==0){
+  char buff[PATH_MAX];
+  char* cwd=getcwd(buff, sizeof(buff));
+  source_dir=opendir(cwd);
+  } else{
+  source_dir=opendir(directory);
+  }
+  if(source_dir){
+    while((dirent=readdir(source_dir))!=NULL){
+      if(strcmp(dirent->d_name, ".")!=0 && strcmp(dirent->d_name, "..")!=0){
+	if(strcmp(ext(dirent->d_name), extension)==0){
+	RMFILE(base(dirent->d_name));	
+  	}
+      }
+    }
+  }
+  return 1;
+}
+
 int MKDIR(char* path){
   struct stat fi;
   if(stat(path, &fi)!=0){
@@ -211,6 +252,9 @@ int MKDIR(char* path){
       fprintf(stderr, "mkdir error:%s %d\n", path, errno);
       return 0;
     }
+  }
+  if(IS_PATH_EXIST(path)){
+  debug("DIRECTORY EXISTS", path);
   }
   debug("CREATED DIR", path);
   return 1;
@@ -246,58 +290,64 @@ int print_exec(char* args[]){
   return 1;
 }
 
-int compile_file(char* file, char* compiler, const char* extension){
-if(file==NULL || compiler==NULL || extension==NULL){
+int compile_file(char* file, char* destination, char* compiler, const char* extension){
+if(file==NULL || destination==NULL || compiler==NULL || extension==NULL){
+    fprintf(stderr, "origin, destination, compiler or extension was null\n");
+    return 0;
+}
+if(strcmp(ext(file), extension)==0){
+char* command[]={compiler, file, "-o", destination, NULL};
+exec(command);
+if(IS_PATH_EXIST(base(file))){
+debug_print("COMPILED", file);
+} else{
+debug_print("COULDNT COMPILE", file);
+}
+}
+return 1;
+}
+
+int compile_targets(char* files[], char* destination, char* compiler, Cstr extension){
+if(files==NULL || destination==NULL || compiler==NULL || extension==NULL){
     fprintf(stderr, "file, destination, compiler or extension was null\n");
     return 0;
   }
-  if(strcmp(file, ".")==0){
+  if(strcmp(*files, ".")==0 || strcmp(destination, ".")==0){
   fprintf(stderr, "file and destination can not be only a dot\n");
   return 0;
   }
   struct stat fi;
-  if(strcmp(ext(file), extension)==0){
-  char* command[]={compiler, file, "-o", base(file), NULL};
-  exec(command); 
+  if(strcmp(ext(*files), extension)==0){
+  int i;
+  int sz=sizeof(**files)/sizeof files[0];
+    for(i=0; i<sz; i++){
+  printf("elems:%d\n", sz); 
+  char* command[]={compiler, files[i], "-o", destination, NULL};
+  if(exec(command)){ 
   print_exec(command);
+  } else{
+  debug_print_array("COULDNT COMPILE", files);
+  }
+    }
   }
   else{
-  fprintf(stderr, "%s doesnt have the right extension\n", file);
+  fprintf(stderr, "%s doesnt have the right extension\n", *files);
   return 0;
   }
-  if(stat(base(file), &fi)!=0){
-  fprintf(stderr, "%s wasnt compiled correctly\n", base(file));
+  if(stat(base(*files), &fi)!=0){
+  fprintf(stderr, "%s wasnt compiled correctly\n", base(*files));
   return 0;
-  }
-  return 1;
-}
-
-int compile_targets(char* files[], char* compiler, Cstr extension){
-  if(files==NULL || compiler==NULL || extension==NULL){
-    fprintf(stderr, "list of files, compiler or extension was null\n");
-    return 0;
-  }
-  struct stat fi;
-  int i;
-  int sz=sizeof(*files);
-  for(i=0; i<sz; i++){
-    if(stat(files[i], &fi)==0 && strcmp(ext(files[i]), extension)==0){
-      printf("size:%d file[i]:{%s}\n", sz, files[i]);
-      char* command[]={compiler, files[i], "-o", base(files[i]), NULL};
-      exec(command);
-    }
   }
   return 1;
 }
 
 int compile_dir(char* origin, char* destination, char* compiler, Cstr extension){
   if(origin==NULL || destination==NULL || compiler==NULL || extension==NULL){
-    fprintf(stderr, "origin, destination, compiler, or extension was null\n");
+    fprintf(stderr, "origin, destination, compiler or extension was null\n");
     return 0;
   }
   struct dirent *dirent;
   DIR* source_dir;
-  DIR* binary_dir;
   source_dir=opendir(origin);
   if(source_dir){
     while((dirent=readdir(source_dir))!=NULL){
@@ -310,7 +360,7 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
 	    exec(command);
 	    debug("COMPILED", command[3]);
 	    debug("BINARY", command[2]);
-          printf("finished compiling %s %s\n", command[3], command[2]);
+	    debug("finished compiling", command[3], command[2]);
 	  }
 	  else{
 	    if(strcmp(origin, ".")==0){
@@ -355,7 +405,7 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
 
 #define GO_REBUILD(argc, argv){    						      \
   char* file=__FILE__;      						      	      \
-  debug("FILE", file);     						      	      \
+  printf("FILE %s\n", file);     						      \
   assert(file!=NULL && argc>=0); 						      \
   if(is_path1_modified_after_path2(file, argv[0])){				      \
     char* command[]={"cc", "-o", argv[0], file, NULL};				      \
@@ -363,4 +413,5 @@ int compile_dir(char* origin, char* destination, char* compiler, Cstr extension)
     exec(command); 								      \
   }										      \
 }
+
 #endif // COMPILATION_IMPLEMENTATION

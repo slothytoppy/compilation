@@ -11,7 +11,7 @@ write(fd, "int main(){\n", strlen("int main(){\n"));
 write(fd, "  printf(\"hello world\\n\");\n", strlen("  printf(\"hello world\\n\");\n"));
 write(fd, "}", strlen("}"));
 close(fd);
-char* command[]={"gcc", "comp.c", "-o", "comp", NULL};
+char* command[]={"cc", "comp.c", "-o", "comp", NULL};
 exec(command);
 return 0;
 }

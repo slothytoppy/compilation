@@ -20,7 +20,7 @@ write_file("compile_test1.c");
 write_file("compile_test2.c");
 write_file("compile_test3.c");
 write_file("compile_test4.c");
-compile_targets(files, "cc", ".c"); 
+compile_targets(files, base(*files), "cc", ".c"); 
 int i;
 int sz=sizeof(files)/sizeof(files[0]);
 for(i=0; i<sz; i++){

@@ -2,7 +2,6 @@ example
 test
 test.c
 bin/
-.git
 build/
 examples/git
 examples/recipe
@@ -13,3 +12,5 @@ tests/compile_targets_test
 tests/compile_test
 tests/mkdir_test
 tests/remove_file_test
+tests/base_ext_test
+comp/
