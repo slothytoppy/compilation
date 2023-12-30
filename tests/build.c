@@ -8,7 +8,7 @@ CLEAN(".", ".c");
   }
   else{
   print_source();
-GO_REBUILD(argc, argv);
+GO_REBUILD(argc, argv, "tcc");
 compile_dir(".", ".", "cc", ".c"); 
   }
 return 0;

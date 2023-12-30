@@ -1,5 +1,5 @@
 #define COMPILATION_IMPLEMENTATION
-
+#define DEBUG
 #include "../nomake.h"
 
 int write_file(char* file){
@@ -15,17 +15,17 @@ return 0;
 }
 
 int main(){
-char* files[]={"compile_test1.c", "compile_test2.c", "compile_test3.c", "compile_test4.c", NULL};
+char* files[]={"compile_test1.c", "compile_test2.c", "compile_test3.c", "compile_test4.c"};
 write_file("compile_test1.c");
 write_file("compile_test2.c");
 write_file("compile_test3.c");
 write_file("compile_test4.c");
-compile_targets(files, base(*files), "cc", ".c"); 
 int i;
 int sz=sizeof(files)/sizeof(files[0]);
+compile_targets(sz, files, "bin", "tcc", ".c"); 
 for(i=0; i<sz; i++){
-RMFILE(files[i]);
-RMFILE(base(files[i]));
+// RMFILE(base(files[i]));
+// RMFILE(files[i]);
 }
 return 0;
 }
