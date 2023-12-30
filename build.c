@@ -8,5 +8,6 @@ compile_file("examples/recipe.c", "bin/recipe", "cc", ".c");
 } else{
 MKDIR("bin");
 }
+printf("abcda\n");
 }
 
