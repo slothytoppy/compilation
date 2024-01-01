@@ -20,7 +20,7 @@ unsigned int print_exec(char* args[]);
 unsigned int compile_file(char* file, char* destination, char* compiler, const char* extension);
 unsigned int compile_targets(char* files[], char* destination, char* compiler, const char* extension);
 unsigned int compile_dir(char* origin, char* destination, char* compiler, const char* extension);
-
+unsigned int write_basic_c_file(char* file);
 #endif
 
 #ifdef COMPILATION_IMPLEMENTATION
@@ -449,5 +449,28 @@ return 1;
 		}																																									\
 	}																																										\
 }																																											
+
+int write_to_file(int fd, char* file){
+write(fd, file, strlen(file));
+}
+
+unsigned int write_basic_c_file(char* file){
+MKFILE(file);
+int fd=open(file, O_WRONLY);
+write_to_file(fd, "#include <stdio.h>\n");
+write_to_file(fd, "\n");
+write_to_file(fd, "int main(int argc, char* argv[]){\n");
+write_to_file(fd, "  int i;\n");
+write_to_file(fd, "  for(i=1; i<argc; i++){\n");
+write_to_file(fd, "  printf(\"argv%d:%s\\n\", i, argv[i]);\n");
+write_to_file(fd, "  }\n");
+// write_to_file("  if(argc>1){\n");
+// write_to_file( "  printf(\"argv1:%s\\n\", argv[1]);\n");
+// write_to_file("  }\n");
+write_to_file(fd, "  printf(\"hello world\\n\");\n");
+write_to_file(fd, "}\n");
+close(fd);
+return 0;
+}
 
 #endif // COMPILATION_IMPLEMENTATION

@@ -1,4 +1,5 @@
 start date: 12/17/23
+<p> i got inspiration for this project from tsoding:<a>https://youtube.com/tsodingdaily</a></p>
 <p>the name of this build tool is NoMake™. 
 This build tool is simple and can be used to compile multiple directories, you can even call different compilers that look for a different extension in the same directory!
 I will try to add recursion so that people can use this to compile all the files inside of a directory.</p>
