@@ -425,6 +425,7 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 }
 
 int renameold(char* file){
+if(!file) return 0;
 char* old=calloc(1, PATH_MAX);
 strcat(old, file);
 strcat(old, ".old");
