@@ -39,12 +39,14 @@ unsigned int write_basic_c_file(char* file);
 #include <pthread.h>
 
 #ifdef DEBUG
-#define debug(status, ...) debug_print(status, __VA_ARGS__);
+#define debug(status, ...) debug_print(status, __VA_ARGS__)
+#define debug_char(status, ...) debug_print_char(status, __VA_ARGS__)
 #define print_files(file1, file2) printf("%s && %s\n", file1, file2)
 #define print_source() printf("[SOURCE]", __FILE__)
 #else 
 // is neccesary so that if DEBUG isnt defined it does nothing
 #define debug(status, ...)
+#define debug_char(status, ...)
 #define print_files(file1, file2)
 #define print_source(){            \
   char* file=__FILE__;             \
@@ -62,6 +64,17 @@ unsigned int debug_print(char* status, ...){
   va_end(args);
   printf("\n");
   return 1;
+}
+
+unsigned int debug_print_char(char* status, ...){
+if(!status) return 0;
+va_list args;
+va_start(args, status);
+printf("[%s] ", status);
+vprintf("%c " , args);
+va_end(args);
+printf("\n");
+return 1;
 }
 
 unsigned int exec(char* args[]){
@@ -114,9 +127,9 @@ unsigned int len(Cstr str1){
 
 unsigned int ends_with(char* str1, char with){
 if(str1==NULL || with==0) return 0;
-unsigned int sz=len(str1);
-printf("NEEDLE IS %c\n", with);
+unsigned int sz=len(str1)-1;
 if(str1[sz]==with){
+debug_char("NEEDLE IS", with);
 return 1;
 }
 return 0;
