@@ -2,7 +2,8 @@
 #include "nomake.h"
 
 int main(int argc, char* argv[]){
-// if(argc==1) return -1;
+const char const *str="hello";
+if(argc==1) return -1;
 // struct stat fi;
 // stat(argv[1], &fi);
 // printf("size: %ld\n", fi.st_size);

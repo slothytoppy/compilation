@@ -114,8 +114,8 @@ unsigned int len(Cstr str1){
 
 unsigned int ends_with(char* str1, char with){
 if(str1==NULL || with==0) return 0;
-unsigned int sz=len(str1)-1; // index starts at zero so i have to get rid of 1 so it doesnt access the \0
-debug("NEEDLE IS", str1[sz]);
+unsigned int sz=len(str1);
+printf("NEEDLE IS %c\n", with);
 if(str1[sz]==with){
 return 1;
 }
@@ -324,7 +324,6 @@ if(files==NULL || destination==NULL || compiler==NULL || extension==NULL){
   return 0;
   }
   unsigned int i;
-  unsigned int j;
   struct stat fi;
   printf("DEBUG ELEMS:%d\n", sz); 
   for(i=0; i<sz; i++){
@@ -363,7 +362,6 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
     fprintf(stderr, "origin, destination, compiler or extension was null\n");
     return 0;
   }
-  unsigned int i=0;
   struct dirent *dirent;
   DIR* source_dir;
   source_dir=opendir(origin);
@@ -371,7 +369,6 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
     while((dirent=readdir(source_dir))!=NULL){
       if(strcmp(dirent->d_name, ".")!=0 && strcmp(dirent->d_name, "..")!=0){
 	if(strcmp(ext(dirent->d_name), extension)==0){
-	i++;
 	  char* dest_path=calloc(1, PATH_MAX);
 	  char* origin_path=calloc(1, PATH_MAX);
 	  if(strcmp(origin, destination)==0){
@@ -385,7 +382,7 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 	    if(strcmp(origin, ".")==0){
 	    strcat(origin_path, dirent->d_name);	
 	    debug("ORIGIN:dot", origin_path);
-	    } else{
+	    } 
 	    if(strcmp(origin, ".")!=0){
 	    strcat(origin_path, origin);
 	    if(!ends_with(origin_path, '/')){
@@ -394,25 +391,27 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 	    strcat(origin_path, dirent->d_name);
 	    debug("ORIGIN:path", origin_path);
 	    }
-	    }
 	    if(strcmp(destination, ".")==0){
-	    /* 
 	    strcat(dest_path, origin);
-	    strcat(dest_path, "/");
-	    */
+	    if(!ends_with(dest_path, '/')){
+			strcat(dest_path, "/");
+	    }
 	    strcat(dest_path, base(dirent->d_name));
 	    debug("DEST:path", dest_path);
 	    }
 	    if(strcmp(destination, ".")!=0){
 	    strcat(dest_path, destination);
+	    unsigned int sz=strlen(dest_path);
+			debug("DEST:dot", dest_path);
 	    if(!ends_with(dest_path, '/')){
-	    strcat(dest_path, "/");
+			strcat(dest_path, "/");
 	    }
 	    strcat(dest_path, base(dirent->d_name));
 	    debug("DEST:path", dest_path);
 	    }
 	    char* command[]={compiler, "-o", dest_path, origin_path, NULL};
-	    debug("COMMAND", command[0]);
+	    exec(command);
+			debug("COMMAND", command[0]);
 	    debug("BINARY", command[2]);
 	    debug("SOURCE", command[3]);
 	    printf("[source]:%s [binary]:%s\n", origin_path, dest_path);
@@ -453,6 +452,7 @@ return 1;
 
 int write_to_file(int fd, char* file){
 write(fd, file, strlen(file));
+return 0;
 }
 
 unsigned int write_basic_c_file(char* file){
@@ -465,9 +465,6 @@ write_to_file(fd, "  int i;\n");
 write_to_file(fd, "  for(i=1; i<argc; i++){\n");
 write_to_file(fd, "  printf(\"argv%d:%s\\n\", i, argv[i]);\n");
 write_to_file(fd, "  }\n");
-// write_to_file("  if(argc>1){\n");
-// write_to_file( "  printf(\"argv1:%s\\n\", argv[1]);\n");
-// write_to_file("  }\n");
 write_to_file(fd, "  printf(\"hello world\\n\");\n");
 write_to_file(fd, "}\n");
 close(fd);
