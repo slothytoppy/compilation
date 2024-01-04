@@ -39,14 +39,12 @@ unsigned int write_basic_c_file(char* file);
 #include <pthread.h>
 
 #ifdef DEBUG
-#define debug(status, ...) debug_print(status, __VA_ARGS__)
-#define debug_char(status, ...) debug_print_char(status, __VA_ARGS__)
+#define debug(status, ...) debug_print(status, __VA_ARGS__);
 #define print_files(file1, file2) printf("%s && %s\n", file1, file2)
 #define print_source() printf("[SOURCE]", __FILE__)
 #else 
 // is neccesary so that if DEBUG isnt defined it does nothing
 #define debug(status, ...)
-#define debug_char(status, ...)
 #define print_files(file1, file2)
 #define print_source(){            \
   char* file=__FILE__;             \
@@ -64,17 +62,6 @@ unsigned int debug_print(char* status, ...){
   va_end(args);
   printf("\n");
   return 1;
-}
-
-unsigned int debug_print_char(char* status, ...){
-if(!status) return 0;
-va_list args;
-va_start(args, status);
-printf("[%s] ", status);
-vprintf("%c " , args);
-va_end(args);
-printf("\n");
-return 1;
 }
 
 unsigned int exec(char* args[]){
@@ -127,9 +114,9 @@ unsigned int len(Cstr str1){
 
 unsigned int ends_with(char* str1, char with){
 if(str1==NULL || with==0) return 0;
-unsigned int sz=len(str1)-1;
+unsigned int sz=len(str1);
+printf("NEEDLE IS %c\n", with);
 if(str1[sz]==with){
-debug_char("NEEDLE IS", with);
 return 1;
 }
 return 0;
@@ -325,6 +312,67 @@ debug_print("COULDNT COMPILE", file);
 	}
 }
 return 1;
+}
+
+char* parse(char* str1){
+if(strncmp(str1, "../", 3)==0){
+printf("SLASHHH\n");
+printf("str1:%s\n", str1);
+char* buff=calloc(1, strlen(str1-3));
+strncpy(buff, str1+3, strlen(str1)-3);
+printf("buff:%s\n", buff);
+/*
+char buff[PATH_MAX];
+char* cwd=calloc(1, PATH_MAX);
+strcat(cwd, getcwd(buff, sizeof(buff)));
+char* cbuff=calloc(1, PATH_MAX);
+strcat(cbuff, buff);
+cbuff=strrchr(cwd, '/');
+int sz=strlen(cbuff);
+printf("cbuff:%s\n", cbuff);
+printf("%d\n", sz);
+printf("str1:%s\n", cwd);
+strncpy(cbuff, cwd, strlen(cwd)-sz);
+strcat(cbuff, "/");
+strcat(cbuff, str1);
+printf("cbuff:%s\n", cbuff);
+*/
+// free(cbuff);
+return str1;
+} 
+return NULL;
+}
+
+char* parse_path_dots(char* directory, char* str1){
+char buff[PATH_MAX];
+char* wd=calloc(1, PATH_MAX);
+char* dir=calloc(1, PATH_MAX);
+char* pwd=getcwd(buff, sizeof(buff));
+strcat(wd, pwd);
+int x;
+for(x=0; x<2; x++){
+if(strncmp(directory, "..", 2)==0){
+int i;
+int j=0;
+  for(i=0; i<strlen(wd); i++){
+    if(wd[i]=='/'){
+    j++;
+    }
+    if(j>0){
+    wd=strrchr(wd, '/');
+    }
+   }
+wd=strncpy(wd, pwd, strlen(pwd)-strlen(wd));
+if(wd[1]!='.' && wd[2]!='.'){
+strcat(wd, "/");
+wd=strcat(wd, str1);
+}
+printf("wd:%s\n", wd);
+printf("cwd:%s\n", pwd);
+return wd;
+}
+}
+return NULL;
 }
 
 unsigned int compile_targets(unsigned int sz, char* files[], char* destination, char* compiler, Cstr extension){
