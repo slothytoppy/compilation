@@ -1,5 +1,6 @@
 #ifndef COMPILATION_IMPLEMENTATION
 
+
 unsigned int debug_print(char* status, ...);
 unsigned int debug_print_array(char* status, char** msg);
 unsigned int exec(char* args[]);
