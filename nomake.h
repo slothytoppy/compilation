@@ -1,6 +1,5 @@
 #ifndef COMPILATION_IMPLEMENTATION
 
-
 unsigned int debug_print(char* status, ...);
 unsigned int debug_print_array(char* status, char** msg);
 unsigned int exec(char* args[]);
@@ -315,35 +314,37 @@ debug_print("COULDNT COMPILE", file);
 return 1;
 }
 
-char* parse(char* str1){
+// unused, this was going to be used for compile_dir but the shell expands ../ by itself  
+// this function would take a string that starts with ../ and expand it so if you have ../build it would do cwd, chop off the last slash and then replace it with build 
+char* parse_upper_directory (char* str1){ 
 if(strncmp(str1, "../", 3)==0){
-printf("SLASHHH\n");
-printf("str1:%s\n", str1);
+debug("str1:", str1);
 char* buff=calloc(1, strlen(str1-3));
-strncpy(buff, str1+3, strlen(str1)-3);
-printf("buff:%s\n", buff);
-/*
-char buff[PATH_MAX];
+strncat(buff, str1+3, strlen(str1)-3);
+debug("buff:", buff);
 char* cwd=calloc(1, PATH_MAX);
-strcat(cwd, getcwd(buff, sizeof(buff)));
+char cwbuff[PATH_MAX];
+strcat(cwd, getcwd(cwbuff, sizeof(cwbuff)));
+debug("cwd:", cwd);
 char* cbuff=calloc(1, PATH_MAX);
 strcat(cbuff, buff);
+debug("cbuff:", cbuff);
 cbuff=strrchr(cwd, '/');
 int sz=strlen(cbuff);
-printf("cbuff:%s\n", cbuff);
-printf("%d\n", sz);
-printf("str1:%s\n", cwd);
+debug("cbuff:", cbuff);
+debug("str1:", cwd);
 strncpy(cbuff, cwd, strlen(cwd)-sz);
 strcat(cbuff, "/");
-strcat(cbuff, str1);
-printf("cbuff:%s\n", cbuff);
-*/
-// free(cbuff);
-return str1;
+strcat(cbuff, buff);
+free(buff);
+debug("cbuff:", cbuff);
+free(cwd);
+return cbuff;
 } 
 return NULL;
 }
 
+/* // unused like the above function
 char* parse_path_dots(char* directory, char* str1){
 char buff[PATH_MAX];
 char* wd=calloc(1, PATH_MAX);
@@ -375,6 +376,7 @@ return wd;
 }
 return NULL;
 }
+*/
 
 unsigned int compile_targets(unsigned int sz, char* files[], char* destination, char* compiler, Cstr extension){
 if(files==NULL || destination==NULL || compiler==NULL || extension==NULL){
@@ -424,7 +426,7 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
     fprintf(stderr, "origin, destination, compiler or extension was null\n");
     return 0;
   }
-  struct dirent *dirent;
+	struct dirent *dirent;
   DIR* source_dir;
   source_dir=opendir(origin);
   if(source_dir){
@@ -433,7 +435,9 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 	if(strcmp(ext(dirent->d_name), extension)==0){
 	  char* dest_path=calloc(1, PATH_MAX);
 	  char* origin_path=calloc(1, PATH_MAX);
-	  if(strcmp(origin, destination)==0){
+		char* buff=calloc(1, PATH_MAX);
+		char* dbuff=calloc(1, PATH_MAX);
+		if(strcmp(origin, destination)==0){
 	    char* command[]={compiler, "-o", base(dirent->d_name), dirent->d_name, NULL};
 	    exec(command);
 	    debug("COMPILED", command[3]);
@@ -446,8 +450,8 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 	    debug("ORIGIN:dot", origin_path);
 	    } 
 	    if(strcmp(origin, ".")!=0){
-	    strcat(origin_path, origin);
-	    if(!ends_with(origin_path, '/')){
+			strcat(origin_path, origin);
+			if(!ends_with(origin_path, '/')){
 	    strcat(origin_path, "/");
 	    }
 	    strcat(origin_path, dirent->d_name);
@@ -463,7 +467,6 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 	    }
 	    if(strcmp(destination, ".")!=0){
 	    strcat(dest_path, destination);
-	    unsigned int sz=strlen(dest_path);
 			debug("DEST:dot", dest_path);
 	    if(!ends_with(dest_path, '/')){
 			strcat(dest_path, "/");
