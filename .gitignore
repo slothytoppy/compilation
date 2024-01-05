@@ -16,3 +16,4 @@ tests/remove_file_test
 tests/base_ext_test
 comp/
 recipe
+build.old

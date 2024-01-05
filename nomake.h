@@ -53,6 +53,32 @@ unsigned int write_basic_c_file(char* file);
 #endif // DEBUG
 typedef const char* Cstr;
 
+char* gcwd(char* str1){
+char buff[PATH_MAX];
+return getcwd(buff, sizeof(buff));
+}
+
+char* uppcwd(char* str1, char* str2){
+char* cwd=gcwd(".");
+if(strncmp(str1, "../", 3)==0){
+char* cbuff=calloc(1, strlen(str1));
+strcat(cbuff, str1);
+char* buff=calloc(1, PATH_MAX);
+char* sbuff=strrchr(cwd, '/');
+strncpy(buff, str1+3, strlen(cwd)-strlen(sbuff));
+str2=calloc(1, PATH_MAX);
+strncpy(str2, cwd, strlen(cwd)-strlen(sbuff));
+strcat(str2, "/");
+strcat(str2, buff);
+free(cbuff);
+free(buff);
+return str2;
+}
+strcat(cwd, "/");
+strcat(cwd, str1);
+return str1;
+}
+
 unsigned int debug_print(char* status, ...){
   if(!status) return 0;
 	va_list args;
@@ -316,7 +342,8 @@ return 1;
 
 // unused, this was going to be used for compile_dir but the shell expands ../ by itself  
 // this function would take a string that starts with ../ and expand it so if you have ../build it would do cwd, chop off the last slash and then replace it with build 
-char* parse_upper_directory (char* str1){ 
+/*
+char* parse_upper_directory(char* str1, char* cbuff){ 
 if(strncmp(str1, "../", 3)==0){
 debug("str1:", str1);
 char* buff=calloc(1, strlen(str1-3));
@@ -326,7 +353,6 @@ char* cwd=calloc(1, PATH_MAX);
 char cwbuff[PATH_MAX];
 strcat(cwd, getcwd(cwbuff, sizeof(cwbuff)));
 debug("cwd:", cwd);
-char* cbuff=calloc(1, PATH_MAX);
 strcat(cbuff, buff);
 debug("cbuff:", cbuff);
 cbuff=strrchr(cwd, '/');
@@ -343,6 +369,7 @@ return cbuff;
 } 
 return NULL;
 }
+*/
 
 /* // unused like the above function
 char* parse_path_dots(char* directory, char* str1){
@@ -375,6 +402,32 @@ return wd;
 }
 }
 return NULL;
+}
+*/
+
+// print different working directory like ../dir
+// for now this should only be used for compile_dir 
+// superceded by gcwd(str1, str2);
+/*
+int print_dwd(char* str1){
+if(!str1) return 0;
+char* cwd=calloc(1, PATH_MAX);
+char* cwbuff=calloc(1, PATH_MAX);
+char buff[PATH_MAX];
+strcat(cwd, getcwd(buff, sizeof(buff)));
+char* end_cwd=calloc(1, PATH_MAX);
+end_cwd=strrchr(cwd, '/');
+strncpy(cwbuff, cwd, strlen(cwd)-strlen(end_cwd));
+if(strncmp(str1, "../", 3)==0){
+char* buff=calloc(1, strlen(str1));
+strncpy(buff, str1+3, strlen(str1));
+memset(str1, 0, strlen(str1));
+strcat(str1, buff);
+}
+strcat(cwbuff, "/");
+strcat(cwbuff, str1);
+printf("[binary] %s\n", cwbuff);
+return 0;
 }
 */
 
@@ -437,6 +490,7 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 	  char* origin_path=calloc(1, PATH_MAX);
 		char* buff=calloc(1, PATH_MAX);
 		char* dbuff=calloc(1, PATH_MAX);
+		char* cwdbuff=calloc(1, PATH_MAX);
 		if(strcmp(origin, destination)==0){
 	    char* command[]={compiler, "-o", base(dirent->d_name), dirent->d_name, NULL};
 	    exec(command);
@@ -479,8 +533,9 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 			debug("COMMAND", command[0]);
 	    debug("BINARY", command[2]);
 	    debug("SOURCE", command[3]);
-	    printf("[source]:%s [binary]:%s\n", origin_path, dest_path);
-	  }
+	    printf("[source]:%s ", origin_path);
+			printf("[binary]:%s\n", uppcwd(dest_path, cwdbuff));	
+		}
 	}
       }
     }
