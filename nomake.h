@@ -23,7 +23,7 @@ unsigned int print_exec(char* args[]);
 unsigned int compile_file(char* file, char* destination, char* compiler, const char* extension);
 unsigned int compile_targets(unsigned int sz, char* files[], char* destination, char* compiler, Cstr extension);
 unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr extension);
-int renameold(char* file);
+unsigned int renameold(char* file);
 #endif
 
 #ifdef COMPILATION_IMPLEMENTATION
@@ -481,7 +481,7 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 	return 1;
 }
 
-int renameold(char* file){
+unsigned int renameold(char* file){
 if(!file) return 0;
 char* old=calloc(1, PATH_MAX);
 strcat(old, file);
@@ -499,9 +499,9 @@ return 1;
 	  renameold(argv[0]);																																\
     char* command[]={compiler, "-o", base(file), file, NULL};													\
     if(exec(command)){                                                                \
-    debug_print("COMPILING %s", command[3]);                                                   \
-    debug_print("COMPILED %s", command[2]);                                                    \
-    debug_print("RUNNING %s", argv[0]);																												\
+    debug_print("COMPILING %s", command[3]);                                          \
+    debug_print("COMPILED %s", command[2]);                                           \
+    debug_print("RUNNING %s", argv[0]);																								\
 		run(base(file));																																	\
 		exit(0);																																				  \
 		}																																									\
