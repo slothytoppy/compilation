@@ -1,26 +1,29 @@
 #ifndef COMPILATION_IMPLEMENTATION
-
-unsigned int debug_print(char* status, ...);
-unsigned int debug_print_array(char* status, char** msg);
+void proto_print(char* status, char* fmt, va_list args);
+void INFO(char* fmt, ...);
+void debug_print(char* fmt, ...);
+char* gcwd(char* str1);
+char* upcwd(char* str1, char* str2){
 unsigned int exec(char* args[]);
-unsigned int run(char* pathname)
-unsigned int run_args(char* pathname[]);
-unsigned int len(const char* str1);
-char* ext(const char* file);
-char* base(const char* path);
-unsigned int IS_PATH_DIR(const char* path);
-unsigned int IS_PATH_FILE(const char* path);
-unsigned int IS_PATH_EXIST(const char* path);
-unsigned int MKFILE(const char* file);
-unsigned int RMFILE(const char* file);
-unsigned int MKDIR(const char* path);
-unsigned int RMDIR(const char *path);
-unsigned int is_path1_modified_after_path2(const char* source_path, const char* binary_path);
+unsigned int run(char* pathname);
+unsigned int len(Cstr str1);
+unsigned int ends_with(char* str1, char with);
+const char* ext(Cstr filename);
+char* base(Cstr file);
+unsigned int IS_PATH_DIR(char* path);
+unsigned int IS_PATH_FILE(char* path);
+unsigned int IS_PATH_EXIST(char* path);
+unsigned int MKFILE(char* file);
+unsigned int RMFILE(char* file);
+unsigned int CLEAN(char* directory, char* extension);
+unsigned int MKDIR(char* path);
+unsigned int RMDIR(char *path);
+unsigned int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path);
 unsigned int print_exec(char* args[]);
 unsigned int compile_file(char* file, char* destination, char* compiler, const char* extension);
-unsigned int compile_targets(char* files[], char* destination, char* compiler, const char* extension);
-unsigned int compile_dir(char* origin, char* destination, char* compiler, const char* extension);
-unsigned int write_basic_c_file(char* file);
+unsigned int compile_targets(unsigned int sz, char* files[], char* destination, char* compiler, Cstr extension);
+unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr extension);
+int renameold(char* file);
 #endif
 
 #ifdef COMPILATION_IMPLEMENTATION
@@ -34,68 +37,88 @@ unsigned int write_basic_c_file(char* file);
 #include <sys/stat.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <assert.h>
+// #include <assert.h>
 #include <stdarg.h>
-#include <pthread.h>
+// #include <pthread.h>
 
-#ifdef DEBUG
-#define debug(status, ...) debug_print(status, __VA_ARGS__);
-#define print_files(file1, file2) printf("%s && %s\n", file1, file2)
-#define print_source() printf("[SOURCE]", __FILE__)
-#else 
 // is neccesary so that if DEBUG isnt defined it does nothing
-#define debug(status, ...)
-#define print_files(file1, file2)
 #define print_source(){            \
   char* file=__FILE__;             \
   printf("[SOURCE] %s\n", file);   \
 }
-#endif // DEBUG
+#define PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (printf, STRING_INDEX, FIRST_TO_CHECK)))
 typedef const char* Cstr;
 
-char* gcwd(char* str1){
+void proto_print(char* status, char* fmt, va_list args){
+fprintf(stdout, "[%s] ", status);
+vfprintf(stdout, fmt, args);
+fprintf(stdout, "\n");
+}
+
+void INFO(char* fmt, ...) PRINTF_FORMAT(1, 2); 
+
+void INFO(char* fmt, ...){
+		va_list args;
+		va_start(args, fmt);
+		proto_print("INFO", fmt, args); 
+		va_end(args);
+}
+
+void WARN(char* fmt, ...) PRINTF_FORMAT(1, 2);
+
+void WARN(char* fmt, ...){
+	va_list args;
+	va_start(args, fmt);
+	proto_print("WARNING", fmt, args);
+	va_end(args);
+}
+
+void debug_print(char* fmt, ...) PRINTF_FORMAT(1,2); 
+
+void debug_print(char* fmt, ...){
+va_list args;
+va_start(args, fmt);
+proto_print("DEBUG", fmt, args);
+}
+
+char* gcwd(void){
 char buff[PATH_MAX];
 return getcwd(buff, sizeof(buff));
 }
 
-char* uppcwd(char* str1, char* str2){
-char* cwd=gcwd(".");
+char* upcwd(char* str1, char* str2){
+if(str2==NULL) str2=calloc(1, PATH_MAX);
+if(str1==NULL) return 0;
+char* cwd=gcwd();
 if(strncmp(str1, "../", 3)==0){
 char* cbuff=calloc(1, strlen(str1));
 strcat(cbuff, str1);
 char* buff=calloc(1, PATH_MAX);
 char* sbuff=strrchr(cwd, '/');
 strncpy(buff, str1+3, strlen(cwd)-strlen(sbuff));
-str2=calloc(1, PATH_MAX);
 strncpy(str2, cwd, strlen(cwd)-strlen(sbuff));
 strcat(str2, "/");
 strcat(str2, buff);
 free(cbuff);
 free(buff);
+INFO("%s", str2);
 return str2;
 }
 strcat(cwd, "/");
 strcat(cwd, str1);
+INFO("%s", str1);
 return str1;
 }
 
-unsigned int debug_print(char* status, ...){
-  if(!status) return 0;
-	va_list args;
-  va_start(args, status);
-  printf("[%s] ", status);
-  vprintf("%s " , args);
-  va_end(args);
-  printf("\n");
-  return 1;
-}
-
 unsigned int exec(char* args[]){
-  if(!args) return 0;
+  char* errormsg="exec failed, invalid path or command";
+	if(!args) return 0;
 	pid_t id=fork();
   int child_status;
   if(id==0){
-    execvp(args[0], args);
+    if(!execvp(args[0], args)){
+		WARN("%s", errormsg);
+		}
   } 
   if(id<0){
     printf("forking failed\n");
@@ -110,7 +133,9 @@ unsigned int run_args(char* pathname[]){
 	pid_t id=fork();
   int child_status;
   if(id==0){
-    execv(pathname[0], pathname);
+    if(!execv(pathname[0], pathname)){
+		WARN("%s", "exec failed, invalid path or filename");
+		}
   } 
   if(id<0){
     printf("forking failed\n");
@@ -141,7 +166,7 @@ unsigned int len(Cstr str1){
 unsigned int ends_with(char* str1, char with){
 if(str1==NULL || with==0) return 0;
 unsigned int sz=len(str1);
-printf("NEEDLE IS %c\n", with);
+INFO("NEEDLE IS:%c", with);
 if(str1[sz]==with){
 return 1;
 }
@@ -183,11 +208,10 @@ unsigned int IS_PATH_DIR(char* path){
     perror("errno");
     return 0;
   }
-  if(!S_ISDIR(fi.st_mode)){
-  return 0;
-  }
-  debug("IS DIR", path); 
+  if(S_ISDIR(fi.st_mode)){
   return 1;
+  }
+  return 0;
 }
 
 unsigned int IS_PATH_FILE(char* path){
@@ -202,7 +226,7 @@ unsigned int IS_PATH_FILE(char* path){
   if(!S_ISREG(fi.st_mode)){
   return 0;
   }
-  debug("IS FILE", path); 
+  debug_print("IS FILE %s", path); 
   return 1;
 }
 
@@ -210,10 +234,8 @@ unsigned int IS_PATH_EXIST(char* path){
   if(!path) return 0;
   struct stat fi;
   if(stat(path, &fi)==-1){
-		debug("DOESNT EXIST", path);
     return 0;
   } 
-  debug("EXISTS", path);
   return 1;
 }
 
@@ -227,9 +249,10 @@ unsigned int MKFILE(char* file){
     }
   }
   if(IS_PATH_EXIST(file)){
-  debug("CREATED", file);
-  }
+  debug_print("CREATED %s", file);
   return 1;
+	}
+  return 0;
 }
 
 unsigned int RMFILE(char* file){
@@ -242,9 +265,9 @@ unsigned int RMFILE(char* file){
     }
   }
   if(!IS_PATH_EXIST(file)){
-  debug("REMOVED", file);
-  }
   return 1;
+	}
+  return 0;
 }
 
 unsigned int CLEAN(char* directory, char* extension){
@@ -286,8 +309,7 @@ unsigned int MKDIR(char* path){
   if(IS_PATH_EXIST(path)){
   return 1;
 	}
-  debug("CREATED DIR", path);
-  return 1;
+  return 0;
 }
 
 unsigned int RMDIR(char *path){
@@ -299,8 +321,10 @@ unsigned int RMDIR(char *path){
       return 0;
     }
   }
-  debug("REMOVE DIR", path);
+	if(!IS_PATH_EXIST(path)){
   return 1;
+	}
+	return 0;
 }
 
 unsigned int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path){
@@ -332,104 +356,13 @@ char* command[]={compiler, file, "-o", destination, NULL};
 exec(command);
 print_exec(command);
 	if(IS_PATH_EXIST(destination)){
-debug_print("COMPILED", file);
+debug_print("COMPILED %s", file);
 	} else{
-debug_print("COULDNT COMPILE", file);
+debug_print("COULDNT COMPILE %s", file);
 	}
 }
 return 1;
 }
-
-// unused, this was going to be used for compile_dir but the shell expands ../ by itself  
-// this function would take a string that starts with ../ and expand it so if you have ../build it would do cwd, chop off the last slash and then replace it with build 
-/*
-char* parse_upper_directory(char* str1, char* cbuff){ 
-if(strncmp(str1, "../", 3)==0){
-debug("str1:", str1);
-char* buff=calloc(1, strlen(str1-3));
-strncat(buff, str1+3, strlen(str1)-3);
-debug("buff:", buff);
-char* cwd=calloc(1, PATH_MAX);
-char cwbuff[PATH_MAX];
-strcat(cwd, getcwd(cwbuff, sizeof(cwbuff)));
-debug("cwd:", cwd);
-strcat(cbuff, buff);
-debug("cbuff:", cbuff);
-cbuff=strrchr(cwd, '/');
-int sz=strlen(cbuff);
-debug("cbuff:", cbuff);
-debug("str1:", cwd);
-strncpy(cbuff, cwd, strlen(cwd)-sz);
-strcat(cbuff, "/");
-strcat(cbuff, buff);
-free(buff);
-debug("cbuff:", cbuff);
-free(cwd);
-return cbuff;
-} 
-return NULL;
-}
-*/
-
-/* // unused like the above function
-char* parse_path_dots(char* directory, char* str1){
-char buff[PATH_MAX];
-char* wd=calloc(1, PATH_MAX);
-char* dir=calloc(1, PATH_MAX);
-char* pwd=getcwd(buff, sizeof(buff));
-strcat(wd, pwd);
-int x;
-for(x=0; x<2; x++){
-if(strncmp(directory, "..", 2)==0){
-int i;
-int j=0;
-  for(i=0; i<strlen(wd); i++){
-    if(wd[i]=='/'){
-    j++;
-    }
-    if(j>0){
-    wd=strrchr(wd, '/');
-    }
-   }
-wd=strncpy(wd, pwd, strlen(pwd)-strlen(wd));
-if(wd[1]!='.' && wd[2]!='.'){
-strcat(wd, "/");
-wd=strcat(wd, str1);
-}
-printf("wd:%s\n", wd);
-printf("cwd:%s\n", pwd);
-return wd;
-}
-}
-return NULL;
-}
-*/
-
-// print different working directory like ../dir
-// for now this should only be used for compile_dir 
-// superceded by gcwd(str1, str2);
-/*
-int print_dwd(char* str1){
-if(!str1) return 0;
-char* cwd=calloc(1, PATH_MAX);
-char* cwbuff=calloc(1, PATH_MAX);
-char buff[PATH_MAX];
-strcat(cwd, getcwd(buff, sizeof(buff)));
-char* end_cwd=calloc(1, PATH_MAX);
-end_cwd=strrchr(cwd, '/');
-strncpy(cwbuff, cwd, strlen(cwd)-strlen(end_cwd));
-if(strncmp(str1, "../", 3)==0){
-char* buff=calloc(1, strlen(str1));
-strncpy(buff, str1+3, strlen(str1));
-memset(str1, 0, strlen(str1));
-strcat(str1, buff);
-}
-strcat(cwbuff, "/");
-strcat(cwbuff, str1);
-printf("[binary] %s\n", cwbuff);
-return 0;
-}
-*/
 
 unsigned int compile_targets(unsigned int sz, char* files[], char* destination, char* compiler, Cstr extension){
 if(files==NULL || destination==NULL || compiler==NULL || extension==NULL){
@@ -459,10 +392,13 @@ if(files==NULL || destination==NULL || compiler==NULL || extension==NULL){
   strcat(twd, destination); 
   strcat(twd, "/");
   strcat(twd, base(files[i]));
-  debug("TWD", twd);
+  debug_print("TWD %s", twd);
   char* command[]={compiler, files[i], "-o", twd, NULL};
 			if(exec(command)){
 			print_exec(command);
+			free(twd);
+			} else{
+			free(twd);
 			}
 			}
 	  }
@@ -488,20 +424,20 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 	if(strcmp(ext(dirent->d_name), extension)==0){
 	  char* dest_path=calloc(1, PATH_MAX);
 	  char* origin_path=calloc(1, PATH_MAX);
-		char* buff=calloc(1, PATH_MAX);
-		char* dbuff=calloc(1, PATH_MAX);
+		// char* buff=calloc(1, PATH_MAX);
+		// char* dbuff=calloc(1, PATH_MAX);
 		char* cwdbuff=calloc(1, PATH_MAX);
 		if(strcmp(origin, destination)==0){
 	    char* command[]={compiler, "-o", base(dirent->d_name), dirent->d_name, NULL};
 	    exec(command);
-	    debug("COMPILED", command[3]);
-	    debug("BINARY", command[2]);
-	    debug("finished compiling", command[3], command[2]);
+	    debug_print("COMPILED %s", command[3]);
+	    debug_print("BINARY %s", command[2]);
+	    debug_print("finished compiling %s %s", command[3], command[2]);
 	  }
 	  else{
 	    if(strcmp(origin, ".")==0){
 	    strcat(origin_path, dirent->d_name);	
-	    debug("ORIGIN:dot", origin_path);
+	    debug_print("ORIGIN:dot %s", origin_path);
 	    } 
 	    if(strcmp(origin, ".")!=0){
 			strcat(origin_path, origin);
@@ -509,7 +445,7 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 	    strcat(origin_path, "/");
 	    }
 	    strcat(origin_path, dirent->d_name);
-	    debug("ORIGIN:path", origin_path);
+	    debug_print("ORIGIN:path %s", origin_path);
 	    }
 	    if(strcmp(destination, ".")==0){
 	    strcat(dest_path, origin);
@@ -517,25 +453,27 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 			strcat(dest_path, "/");
 	    }
 	    strcat(dest_path, base(dirent->d_name));
-	    debug("DEST:path", dest_path);
+	    debug_print("DEST:path %s", dest_path);
 	    }
 	    if(strcmp(destination, ".")!=0){
 	    strcat(dest_path, destination);
-			debug("DEST:dot", dest_path);
+			debug_print("DEST:dot %s", dest_path);
 	    if(!ends_with(dest_path, '/')){
 			strcat(dest_path, "/");
 	    }
 	    strcat(dest_path, base(dirent->d_name));
-	    debug("DEST:path", dest_path);
+	    debug_print("DEST:path %s", dest_path);
 	    }
 	    char* command[]={compiler, "-o", dest_path, origin_path, NULL};
 	    exec(command);
-			debug("COMMAND", command[0]);
-	    debug("BINARY", command[2]);
-	    debug("SOURCE", command[3]);
-	    printf("[source]:%s ", origin_path);
-			printf("[binary]:%s\n", uppcwd(dest_path, cwdbuff));	
+			INFO("COMMAND %s", command[0]);
+	    INFO("BINARY %s", command[2]);
+	    INFO("SOURCE %s", command[3]);
+	    INFO("[source]:%s [binary]:%s", origin_path, upcwd(dest_path, cwdbuff)); 
 		}
+			free(dest_path);
+			free(origin_path);
+			free(cwdbuff);
 	}
       }
     }
@@ -549,46 +487,25 @@ char* old=calloc(1, PATH_MAX);
 strcat(old, file);
 strcat(old, ".old");
 rename(file, old);
-debug("RENAMED TO", old);
+debug_print("RENAMED TO %s", old);
 return 1;
 }
 
 #define GO_REBUILD(argc, argv, compiler){																							\
 	char* file=__FILE__;																																\
-	printf("FILE %s\n", file);																													\
-  assert(file!=NULL && argc>=0);																											\
+  if(file==NULL || argc==0)	return 0;																									\
   if(is_path1_modified_after_path2(file, argv[0])){																		\
+	printf("FILE %s\n", file);																													\
 	  renameold(argv[0]);																																\
     char* command[]={compiler, "-o", base(file), file, NULL};													\
     if(exec(command)){                                                                \
-    debug("COMPILING", command[3]);                                                   \
-    debug("COMPILED", command[2]);                                                    \
-    debug("RUNNING", argv[0]);                                                        \
+    debug_print("COMPILING %s", command[3]);                                                   \
+    debug_print("COMPILED %s", command[2]);                                                    \
+    debug_print("RUNNING %s", argv[0]);																												\
 		run(base(file));																																	\
-		exit(0);																																					\
+		exit(0);																																				  \
 		}																																									\
 	}																																										\
 }																																											
-
-int write_to_file(int fd, char* file){
-write(fd, file, strlen(file));
-return 0;
-}
-
-unsigned int write_basic_c_file(char* file){
-MKFILE(file);
-int fd=open(file, O_WRONLY);
-write_to_file(fd, "#include <stdio.h>\n");
-write_to_file(fd, "\n");
-write_to_file(fd, "int main(int argc, char* argv[]){\n");
-write_to_file(fd, "  int i;\n");
-write_to_file(fd, "  for(i=1; i<argc; i++){\n");
-write_to_file(fd, "  printf(\"argv%d:%s\\n\", i, argv[i]);\n");
-write_to_file(fd, "  }\n");
-write_to_file(fd, "  printf(\"hello world\\n\");\n");
-write_to_file(fd, "}\n");
-close(fd);
-return 0;
-}
 
 #endif // COMPILATION_IMPLEMENTATION
