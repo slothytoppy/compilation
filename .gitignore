@@ -17,3 +17,5 @@ tests/base_ext_test
 comp/
 recipe
 build.old
+bit
+bit.c

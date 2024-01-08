@@ -6,9 +6,9 @@ char* gcwd(char* str1);
 char* upcwd(char* str1, char* str2){
 unsigned int exec(char* args[]);
 unsigned int run(char* pathname);
-unsigned int len(Cstr str1);
+unsigned int len(const char* str1);
 unsigned int ends_with(char* str1, char with);
-const char* ext(Cstr filename);
+const char* ext(const char* filename);
 char* base(Cstr file);
 unsigned int IS_PATH_DIR(char* path);
 unsigned int IS_PATH_FILE(char* path);
@@ -18,11 +18,11 @@ unsigned int RMFILE(char* file);
 unsigned int CLEAN(char* directory, char* extension);
 unsigned int MKDIR(char* path);
 unsigned int RMDIR(char *path);
-unsigned int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path);
+unsigned int is_path1_modified_after_path2(const char* source_path, const char* binary_path);
 unsigned int print_exec(char* args[]);
 unsigned int compile_file(char* file, char* destination, char* compiler, const char* extension);
-unsigned int compile_targets(unsigned int sz, char* files[], char* destination, char* compiler, Cstr extension);
-unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr extension);
+unsigned int compile_targets(unsigned int sz, char* files[], char* destination, char* compiler, const char* extension);
+unsigned int compile_dir(char* origin, char* destination, char* compiler, const char* extension);
 unsigned int renameold(char* file);
 #endif
 
@@ -408,6 +408,150 @@ if(files==NULL || destination==NULL || compiler==NULL || extension==NULL){
   return 0;
   }
   return 1;
+}
+
+unsigned int compile(char* compiler, char* flags[], char* origin, char* destination, char* extension, ...){
+if(origin==NULL || destination==NULL || compiler==NULL || extension==NULL){
+    fprintf(stderr, "origin, destination, compiler or extension was null\n");
+    return 0;
+}
+va_list args;
+va_start(args, extension);
+unsigned int flagc;
+if(flags!=NULL) flagc=va_arg(args, int);
+struct dirent *dirent;
+DIR* source_dir;
+source_dir=opendir(origin);
+if(source_dir){
+	while((dirent=readdir(source_dir))!=NULL){
+    if(strcmp(dirent->d_name, ".")!=0 && strcmp(dirent->d_name, "..")!=0){
+			if(strcmp(ext(dirent->d_name), extension)==0){
+				char* orig_path=calloc(1, PATH_MAX);
+				char* dest_path=calloc(1, PATH_MAX);
+				if(strcmp(origin, ".")==0 && strcmp(destination, ".")==0){
+					printf("D_NAME:%s\n", dirent->d_name);
+					printf("BASE D_NAME:%s\n", base(dirent->d_name));
+					if(flags==NULL){
+					char* command[]={compiler, "-o", base(dirent->d_name), dirent->d_name, NULL};
+					exec(command);
+					} else{
+					unsigned int i=0;
+					char** command=calloc(5+flagc, PATH_MAX);
+					command[0]=compiler;
+					command[1]="-o";
+					command[2]=base(dirent->d_name);
+					command[3]=dirent->d_name;
+					// command=(char**)reallocarray(command, 4+flagc+1, sizeof(char*));
+					if(command==NULL) exit(1);
+					for(i=0; i<flagc; i++) command[4+i]=flags[i];
+					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
+					debug_print("flagc:%d\n", 4+flagc);
+					if(command[2]==NULL || command[3]==NULL) exit(1);
+					command[4+flagc+1]=NULL;
+					exec(command);
+					}
+				}
+				if(strcmp(origin, ".")==0 && strcmp(destination, ".")!=0){
+					if(flags==NULL){
+					strcat(dest_path, destination);
+					if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
+					strcat(dest_path, base(dirent->d_name));
+					strcat(orig_path, dirent->d_name);
+					} else{
+					strcat(dest_path, destination);
+					if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
+					strcat(dest_path, base(dirent->d_name));
+					strcat(orig_path, dirent->d_name);
+					unsigned int i=0;
+					char** command=calloc(5+flagc, PATH_MAX);
+					command[0]=compiler;
+					command[1]="-o";
+					command[2]=dest_path;
+					command[3]=orig_path;
+					// command=(char**)reallocarray(command, 4+flagc+1, sizeof(char*));
+					if(command==NULL) exit(1);
+					for(i=0; i<flagc; i++) command[4+i]=flags[i];
+					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
+					debug_print("flagc:%d\n", 4+flagc);
+					if(command[2]==NULL || command[3]==NULL) exit(1);
+					command[4+flagc+1]=NULL;
+					exec(command);
+					}
+				}
+				if(strcmp(origin, ".")!=0 && strcmp(destination, ".")==0){
+					if(flags==NULL){
+					strcat(dest_path, destination);
+					if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
+					strcat(dest_path, base(dirent->d_name));
+					strcat(orig_path, origin);
+					if(!ends_with(orig_path, '/')) strcat(orig_path, "/");
+					strcat(orig_path, dirent->d_name);
+					} else{
+					strcat(dest_path, destination);
+					if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
+					strcat(dest_path, base(dirent->d_name));
+					strcat(orig_path, origin);
+					if(!ends_with(orig_path, '/')) strcat(orig_path, "/");
+					strcat(orig_path, dirent->d_name);
+					unsigned int i=0;
+					char** command=calloc(5+flagc, PATH_MAX);
+					command[0]=compiler;
+					command[1]="-o";
+					command[2]=dest_path;
+					command[3]=orig_path;
+					// command=(char**)reallocarray(command, 4+flagc+1, sizeof(char*));
+					if(command==NULL) exit(1);
+					for(i=0; i<flagc; i++) command[4+i]=flags[i];
+					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
+					debug_print("flagc:%d\n", 4+flagc);
+					if(command[2]==NULL || command[3]==NULL) exit(1);
+					command[4+flagc+1]=NULL;
+					exec(command);
+					}
+				}
+				if(strcmp(origin, ".")!=0 && strcmp(destination, ".")!=0){
+					if(flags==NULL){
+				strcat(dest_path, destination);
+				if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
+				strcat(dest_path, base(dirent->d_name));
+				strcat(orig_path, origin);
+				if(!ends_with(orig_path, '/')) strcat(orig_path, "/");
+				strcat(orig_path, dirent->d_name);
+					} else{
+			strcat(dest_path, destination);
+				if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
+				strcat(dest_path, base(dirent->d_name));
+				strcat(orig_path, origin);
+				if(!ends_with(orig_path, '/')) strcat(orig_path, "/");
+				strcat(orig_path, dirent->d_name);
+					unsigned int i=0;
+					char** command=calloc(5+flagc, PATH_MAX);
+					command[0]=compiler;
+					command[1]="-o";
+					command[2]=dest_path;
+					command[3]=orig_path;
+					// command=(char**)reallocarray(command, 4+flagc+1, sizeof(char*));
+					if(command==NULL) exit(1);
+					for(i=0; i<flagc; i++) command[4+i]=flags[i];
+					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
+					debug_print("flagc:%d\n", 4+flagc);
+					if(command[2]==NULL || command[3]==NULL) exit(1);
+					command[4+flagc+1]=NULL;
+					exec(command);
+					}
+				}
+			/*
+			INFO("COMMAND %s", command[0]);
+	    INFO("BINARY %s", command[2]);
+	    INFO("SOURCE %s", command[3]);
+	    INFO("[source]:%s [binary]:%s", orig_path, upcwd(dest_path, NULL)); 
+			INFO("compiled:%s", dest_path);	
+			*/
+			}
+			}
+		}
+	}
+	return 0;
 }
 
 unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr extension){
