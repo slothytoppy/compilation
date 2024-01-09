@@ -12,8 +12,10 @@ GO_REBUILD(argc, argv, "tcc");
 printf("upper cwd:%s\n", upcwd("bin", NULL));
 free(str2);
 */
+printf("%d\n", PATH_MAX);
 char* flags[]={"-Wpedantic"};
-compile("gcc", flags, ".", "bin", ".c", 1);
-compile("gcc", flags, "tests", "bin", ".c", 1);
-compile("gcc", flags, "examples", "../bin", ".c", 1);
+unsigned int sz=sizeof(flags)/sizeof(flags[0]);
+compile("gcc", flags, ".", ".", ".c", sz);
+compile("gcc", flags, "tests", "tests", ".c", sz);
+compile("gcc", flags, "examples", "examples", ".c", sz);
 }
