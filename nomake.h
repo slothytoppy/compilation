@@ -26,6 +26,8 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, const 
 unsigned int renameold(char* file);
 #endif
 
+
+
 #ifdef COMPILATION_IMPLEMENTATION
 #include <stdio.h>
 #include <stdlib.h>
