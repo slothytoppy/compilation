@@ -9,7 +9,7 @@ unsigned int run(char* pathname);
 unsigned int len(const char* str1);
 unsigned int ends_with(char* str1, char with);
 const char* ext(const char* filename);
-char* base(Cstr file);
+char* base(const char* file);
 unsigned int IS_PATH_DIR(char* path);
 unsigned int IS_PATH_FILE(char* path);
 unsigned int IS_PATH_EXIST(char* path);
