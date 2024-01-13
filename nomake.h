@@ -1,7 +1,4 @@
 #ifndef COMPILATION_IMPLEMENTATION
-void proto_print(char* status, char* fmt, va_list args);
-void INFO(char* fmt, ...);
-void debug_print(char* fmt, ...);
 char* gcwd(char* str1);
 char* upcwd(char* str1, char* str2){
 unsigned int exec(char* args[]);
@@ -26,8 +23,6 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, const 
 unsigned int renameold(char* file);
 #endif
 
-
-
 #ifdef COMPILATION_IMPLEMENTATION
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,48 +34,45 @@ unsigned int renameold(char* file);
 #include <sys/stat.h>
 #include <errno.h>
 #include <fcntl.h>
-// #include <assert.h>
 #include <stdarg.h>
-// #include <pthread.h>
 
-// is neccesary so that if DEBUG isnt defined it does nothing
 #define print_source(){            \
   char* file=__FILE__;             \
-  printf("[SOURCE] %s\n", file);   \
+  LOG_INFO(NOM_INFO, "SOURCE %s", file);   \
 }
-#define PRINTF_FORMAT(STRING_INDEX, FIRST_TO_CHECK) __attribute__ ((format (printf, STRING_INDEX, FIRST_TO_CHECK)))
+
 typedef const char* Cstr;
 
-void proto_print(char* status, char* fmt, va_list args){
-fprintf(stdout, "[%s] ", status);
-vfprintf(stdout, fmt, args);
-fprintf(stdout, "\n");
-}
+enum log_level{
+	NOM_INFO,
+	NOM_WARN,
+	NOM_PANIC,
+	NOM_DEBUG,
+};
 
-void INFO(char* fmt, ...) PRINTF_FORMAT(1, 2); 
-
-void INFO(char* fmt, ...){
-		va_list args;
-		va_start(args, fmt);
-		proto_print("INFO", fmt, args); 
-		va_end(args);
-}
-
-void WARN(char* fmt, ...) PRINTF_FORMAT(1, 2);
-
-void WARN(char* fmt, ...){
-	va_list args;
-	va_start(args, fmt);
-	proto_print("WARNING", fmt, args);
-	va_end(args);
-}
-
-void debug_print(char* fmt, ...) PRINTF_FORMAT(1,2); 
-
-void debug_print(char* fmt, ...){
+void LOG_INFO(enum log_level level, const char* fmt, ...){
+#ifdef DEBUG 
+	return;
+#endif
+	switch(level){
+	case NOM_DEBUG:
+		fprintf(stderr, "[DEBUG] ");
+	break;
+	case NOM_INFO:
+		fprintf(stderr, "[INFO] ");
+	break;
+	case NOM_WARN:
+		fprintf(stderr, "[WARNING] ");
+	break;
+	case NOM_PANIC:
+		fprintf(stderr, "[PANIC] ");
+	break;
+	}
 va_list args;
 va_start(args, fmt);
-proto_print("DEBUG", fmt, args);
+vfprintf(stderr, fmt, args);
+va_end(args);
+fprintf(stderr, "\n");
 }
 
 char* gcwd(void){
@@ -103,12 +95,12 @@ strcat(str2, "/");
 strcat(str2, buff);
 free(cbuff);
 free(buff);
-INFO("%s", str2);
+LOG_INFO(NOM_INFO, "%s", str2);
 return str2;
 }
 strcat(cwd, "/");
 strcat(cwd, str1);
-INFO("%s", str1);
+LOG_INFO(NOM_INFO, "%s", str1);
 return str1;
 }
 
@@ -119,7 +111,7 @@ unsigned int exec(char* args[]){
   int child_status;
   if(id==0){
     if(!execvp(args[0], args)){
-		WARN("%s", errormsg);
+		LOG_INFO(NOM_WARN, "%s", errormsg);
 		}
   } 
   if(id<0){
@@ -136,7 +128,7 @@ unsigned int run_args(char* pathname[]){
   int child_status;
   if(id==0){
     if(!execv(pathname[0], pathname)){
-		WARN("%s", "exec failed, invalid path or filename");
+		LOG_INFO(NOM_WARN, "%s", "exec failed, invalid path or filename");
 		}
   } 
   if(id<0){
@@ -168,7 +160,7 @@ unsigned int len(Cstr str1){
 unsigned int ends_with(char* str1, char with){
 if(str1==NULL || with==0) return 0;
 unsigned int sz=len(str1);
-INFO("NEEDLE IS:%c", with);
+LOG_INFO(NOM_INFO, "NEEDLE IS:%c", with);
 if(str1[sz]==with){
 return 1;
 }
@@ -228,7 +220,7 @@ unsigned int IS_PATH_FILE(char* path){
   if(!S_ISREG(fi.st_mode)){
   return 0;
   }
-  debug_print("IS FILE %s", path); 
+  LOG_INFO(NOM_DEBUG, "IS FILE %s", path); 
   return 1;
 }
 
@@ -251,7 +243,7 @@ unsigned int MKFILE(char* file){
     }
   }
   if(IS_PATH_EXIST(file)){
-  debug_print("CREATED %s", file);
+  LOG_INFO(NOM_DEBUG, "CREATED %s", file);
   return 1;
 	}
   return 0;
@@ -358,9 +350,9 @@ char* command[]={compiler, file, "-o", destination, NULL};
 exec(command);
 print_exec(command);
 	if(IS_PATH_EXIST(destination)){
-debug_print("COMPILED %s", file);
+LOG_INFO(NOM_DEBUG, "COMPILED %s", file);
 	} else{
-debug_print("COULDNT COMPILE %s", file);
+LOG_INFO(NOM_DEBUG, "COULDNT COMPILE %s", file);
 	}
 }
 return 1;
@@ -394,7 +386,7 @@ if(files==NULL || destination==NULL || compiler==NULL || extension==NULL){
   strcat(twd, destination); 
   strcat(twd, "/");
   strcat(twd, base(files[i]));
-  debug_print("TWD %s", twd);
+  LOG_INFO(NOM_DEBUG, "TWD %s", twd);
   char* command[]={compiler, files[i], "-o", twd, NULL};
 			if(exec(command)){
 			print_exec(command);
@@ -431,8 +423,8 @@ if(source_dir){
 				char* orig_path=calloc(1, PATH_MAX);
 				char* dest_path=calloc(1, PATH_MAX);
 				if(strcmp(origin, ".")==0 && strcmp(destination, ".")==0){
-					printf("D_NAME:%s\n", dirent->d_name);
-					printf("BASE D_NAME:%s\n", base(dirent->d_name));
+					LOG_INFO(NOM_INFO, "D_NAME:%s\n", dirent->d_name);
+					LOG_INFO(NOM_INFO, "BASE D_NAME:%s\n", base(dirent->d_name));
 					if(flags==NULL){
 					char* command[]={compiler, "-o", base(dirent->d_name), dirent->d_name, NULL};
 					exec(command);
@@ -447,7 +439,7 @@ if(source_dir){
 					if(command==NULL) exit(1);
 					for(i=0; i<flagc; i++) command[4+i]=flags[i];
 					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
-					debug_print("flagc:%d\n", 4+flagc);
+					LOG_INFO(NOM_DEBUG, "flagc:%d\n", 4+flagc);
 					if(command[2]==NULL || command[3]==NULL) exit(1);
 					command[4+flagc+1]=NULL;
 					exec(command);
@@ -474,7 +466,7 @@ if(source_dir){
 					if(command==NULL) exit(1);
 					for(i=0; i<flagc; i++) command[4+i]=flags[i];
 					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
-					debug_print("flagc:%d\n", 4+flagc);
+					LOG_INFO(NOM_DEBUG, "flagc:%d\n", 4+flagc);
 					if(command[2]==NULL || command[3]==NULL) exit(1);
 					command[4+flagc+1]=NULL;
 					exec(command);
@@ -505,7 +497,7 @@ if(source_dir){
 					if(command==NULL) exit(1);
 					for(i=0; i<flagc; i++) command[4+i]=flags[i];
 					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
-					debug_print("flagc:%d\n", 4+flagc);
+					LOG_INFO(NOM_DEBUG, "flagc:%d\n", 4+flagc);
 					if(command[2]==NULL || command[3]==NULL) exit(1);
 					command[4+flagc+1]=NULL;
 					exec(command);
@@ -536,7 +528,7 @@ if(source_dir){
 					if(command==NULL) exit(1);
 					for(i=0; i<flagc; i++) command[4+i]=flags[i];
 					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
-					debug_print("flagc:%d\n", 4+flagc);
+					LOG_INFO(NOM_DEBUG, "flagc:%d\n", 4+flagc);
 					if(command[2]==NULL || command[3]==NULL) exit(1);
 					command[4+flagc+1]=NULL;
 					exec(command);
@@ -576,14 +568,14 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 		if(strcmp(origin, destination)==0){
 	    char* command[]={compiler, "-o", base(dirent->d_name), dirent->d_name, NULL};
 	    exec(command);
-	    debug_print("COMPILED %s", command[3]);
-	    debug_print("BINARY %s", command[2]);
-	    debug_print("finished compiling %s %s", command[3], command[2]);
+	    LOG_INFO(NOM_DEBUG, "COMPILED %s", command[3]);
+	    LOG_INFO(NOM_DEBUG, "BINARY %s", command[2]);
+	    LOG_INFO(NOM_DEBUG, "finished compiling %s %s", command[3], command[2]);
 	  }
 	  else{
 	    if(strcmp(origin, ".")==0){
 	    strcat(origin_path, dirent->d_name);	
-	    debug_print("ORIGIN:dot %s", origin_path);
+	    LOG_INFO(NOM_DEBUG, "ORIGIN:dot %s", origin_path);
 	    } 
 	    if(strcmp(origin, ".")!=0){
 			strcat(origin_path, origin);
@@ -591,7 +583,7 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 	    strcat(origin_path, "/");
 	    }
 	    strcat(origin_path, dirent->d_name);
-	    debug_print("ORIGIN:path %s", origin_path);
+	    LOG_INFO(NOM_DEBUG, "ORIGIN:path %s", origin_path);
 	    }
 	    if(strcmp(destination, ".")==0){
 	    strcat(dest_path, origin);
@@ -599,23 +591,23 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr e
 			strcat(dest_path, "/");
 	    }
 	    strcat(dest_path, base(dirent->d_name));
-	    debug_print("DEST:path %s", dest_path);
+	    LOG_INFO(NOM_DEBUG, "DEST:path %s", dest_path);
 	    }
 	    if(strcmp(destination, ".")!=0){
 	    strcat(dest_path, destination);
-			debug_print("DEST:dot %s", dest_path);
+			LOG_INFO(NOM_DEBUG, "DEST:dot %s", dest_path);
 	    if(!ends_with(dest_path, '/')){
 			strcat(dest_path, "/");
 	    }
 	    strcat(dest_path, base(dirent->d_name));
-	    debug_print("DEST:path %s", dest_path);
+	    LOG_INFO(NOM_DEBUG, "DEST:path %s", dest_path);
 	    }
 	    char* command[]={compiler, "-o", dest_path, origin_path, NULL};
 	    exec(command);
-			INFO("COMMAND %s", command[0]);
-	    INFO("BINARY %s", command[2]);
-	    INFO("SOURCE %s", command[3]);
-	    INFO("[source]:%s [binary]:%s", origin_path, upcwd(dest_path, cwdbuff)); 
+			LOG_INFO(NOM_INFO, "COMMAND %s", command[0]);
+	    LOG_INFO(NOM_INFO, "BINARY %s", command[2]);
+	    LOG_INFO(NOM_INFO, "SOURCE %s", command[3]);
+	    LOG_INFO(NOM_INFO, "[source]:%s [binary]:%s", origin_path, upcwd(dest_path, cwdbuff)); 
 		}
 			free(dest_path);
 			free(origin_path);
@@ -633,7 +625,7 @@ char* old=calloc(1, PATH_MAX);
 strcat(old, file);
 strcat(old, ".old");
 rename(file, old);
-debug_print("RENAMED TO %s", old);
+LOG_INFO(NOM_INFO, "RENAMED TO %s", old);
 return 1;
 }
 
@@ -645,9 +637,9 @@ return 1;
 	  renameold(argv[0]);																																\
     char* command[]={compiler, "-o", base(file), file, NULL};													\
     if(exec(command)){                                                                \
-    debug_print("COMPILING %s", command[3]);                                          \
-    debug_print("COMPILED %s", command[2]);                                           \
-    debug_print("RUNNING %s", argv[0]);																								\
+    LOG_INFO(NOM_DEBUG, "COMPILING %s", command[3]);                                  \
+    LOG_INFO(NOM_DEBUG, "COMPILED %s", command[2]);                                   \
+    LOG_INFO(NOM_DEBUG, "RUNNING %s", argv[0]);																	      \
 		run(base(file));																																	\
 		exit(0);																																				  \
 		}																																									\
