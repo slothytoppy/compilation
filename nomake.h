@@ -1,22 +1,22 @@
 #ifndef COMPILATION_IMPLEMENTATION
-char* gcwd(char* str1);
-char* upcwd(char* str1, char* str2){
-unsigned int exec(char* args[]);
-unsigned int run(char* pathname);
-unsigned int len(const char* str1);
+char* gcwd(char* str1); // gets the cwd
+char* upcwd(char* str1, char* str2); // if str1 is ../dir, it will move what is after the ../ into str2, if str2 is null it returns str1 
+unsigned int exec(char* args[]); // is a wrapper for execvp 
+unsigned int run(char* pathname); 
+unsigned int len(const char* str1); // my own strlen(not used very much but it is used)
 unsigned int ends_with(char* str1, char with);
 const char* ext(const char* filename);
-char* base(const char* file);
-unsigned int IS_PATH_DIR(char* path);
+char* base(const char* file); // only works for files that have slashes, i havent tested if it works for something like ../../file 
+unsigned int IS_PATH_DIR(char* path); 
 unsigned int IS_PATH_FILE(char* path);
 unsigned int IS_PATH_EXIST(char* path);
 unsigned int MKFILE(char* file);
 unsigned int RMFILE(char* file);
-unsigned int CLEAN(char* directory, char* extension);
+unsigned int CLEAN(char* directory, char* extension); 
 unsigned int MKDIR(char* path);
 unsigned int RMDIR(char *path);
-unsigned int is_path1_modified_after_path2(const char* source_path, const char* binary_path);
-unsigned int print_exec(char* args[]);
+unsigned int is_path1_modified_after_path2(const char* source_path, const char* binary_path); 
+unsigned int print_exec(char* args[]); 
 unsigned int compile_file(char* file, char* destination, char* compiler, const char* extension);
 unsigned int compile_targets(unsigned int sz, char* files[], char* destination, char* compiler, const char* extension);
 unsigned int compile_dir(char* origin, char* destination, char* compiler, const char* extension);
