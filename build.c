@@ -1,4 +1,4 @@
-#define COMPILATION_IMPLEMENTATION // needed for getting the implementation of the functions
+#define NOMAKE_IMPLEMENTATION // needed for getting the implementation of the functions
 // #define DEBUG // old feature, no longer used in favor of NOM_LOG
 #include "nomake.h"
 
