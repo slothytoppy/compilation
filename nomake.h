@@ -1,4 +1,4 @@
-#ifndef COMPILATION_IMPLEMENTATION
+#ifndef NOMAKE_IMPLEMENTATION 
 char* gcwd(void); // gets the cwd
 char* upcwd(char* str1, char* str2); // if str1 is ../dir, it will move what is after the ../ into str2, if str2 is null it returns str1 
 unsigned int exec(char* args[]); // is a wrapper for execvp 
@@ -17,7 +17,7 @@ unsigned int MKDIR(char* path);
 unsigned int RMDIR(char *path);
 unsigned int is_path1_modified_after_path2(const char* source_path, const char* binary_path);
 unsigned int print_exec(char* args[]);
-unsigned int compile_file(char* file, char* destination, char* compiler, const char* extension);
+unsigned int compile_file(char* file, char* flags[], char* destination, char* compiler, const char* extension, ...);
 unsigned int compile_targets(unsigned int sz, char* files[], char* destination, char* compiler, const char* extension);
 unsigned int compile_dir(char* origin, char* destination, char* compiler, const char* extension);
 unsigned int renameold(char* file);
@@ -101,13 +101,6 @@ void nom_cmd_append(Nom_cmd* cmd, char* item){
   }
 }
 
-void nom_cmd_append_many(Nom_cmd* cmd, char* item[]){
-  while(*item!=NULL){
-  nom_cmd_append(cmd, *item);
-  *item++;
-  }
-}
-
 void nom_cmd_append_null(Nom_cmd* cmd){
   if(cmd->count<=0){
   cmd->items[0]==NULL;
@@ -115,6 +108,19 @@ void nom_cmd_append_null(Nom_cmd* cmd){
   cmd->items=realloc(cmd->items, cmd->count*sizeof(char*));
   cmd->items[cmd->count]=NULL;
   }
+}
+
+void nom_cmd_append_many(Nom_cmd* cmd, unsigned int count, ...){
+  assert("dont use for commands");
+  va_list args;
+  va_start(args, count);
+  int i=0;
+  while(i<count){
+  char* item=va_arg(args, char*);
+  nom_cmd_append(cmd, item);
+  i++;
+  }
+  va_end(args);
 }
 
 void* nom_shift_args(int *argc, char*** argv){
@@ -172,23 +178,14 @@ unsigned int exec(char* args[]){
   return 1;
 }
 
-void nom_cmd_compile(Nom_cmd* cmd){
-if(cmd->count<=0) return;
-pid_t id=fork();
-int child_status;
-if(id==0){
-  if(!execvp(cmd->items[0], cmd->items)){
-  NOM_LOG(NOM_WARN, "exec failed, invalid path or command");
-  return;
-  }
-  if(id<0){
-  NOM_LOG(NOM_WARN, "forking failed");
-  return;
-  }
-  wait(&child_status);
+unsigned int nom_cmd_compile(Nom_cmd* cmd){
+if(cmd->count<=0) return 0;
+if(cmd->items[cmd->count]!=NULL){
+NOM_LOG(NOM_PANIC, "cmd is not null terminated");
+return 0;
 }
-printf("compile:{%s}\n", cmd->items[0]);
-return;
+if(exec(cmd->items)) return 1;
+return 0;
 }
 
 unsigned int run_args(char* pathname[]){
@@ -409,20 +406,41 @@ unsigned int print_exec(char* args[]){
   return 1;
 }
 
-unsigned int compile_file(char* file, char* destination, char* compiler, const char* extension){
-	if(file==NULL || destination==NULL || compiler==NULL || extension==NULL){
+unsigned int compile_file(char* compiler, char* flags[], char* file, char* destination, const char* extension, ...){
+if(file==NULL || destination==NULL || compiler==NULL || extension==NULL){
     fprintf(stderr, "origin, destination, compiler or extension was null\n");
     return 0;
-	}
+}
+va_list args;
+va_start(args, extension);
 if(strcmp(ext(file), extension)==0){
+if(flags!=NULL){
+int flagc=va_arg(args, int);
+unsigned int i=0;
+char** command=calloc(5+flagc, PATH_MAX);
+command[0]=compiler;
+command[1]="-o";
+command[2]=destination;
+command[3]=file;
+// command=(char**)reallocarray(command, 4+flagc+1, sizeof(char*));
+if(command==NULL) exit(1);
+for(i=0; i<flagc; i++) command[4+i]=flags[i];
+for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
+NOM_LOG(NOM_DEBUG, "flagc:%d\n", 4+flagc);
+if(command[2]==NULL || command[3]==NULL) exit(1);
+command[4+flagc+1]=NULL;
+exec(command);
+} else{
 char* command[]={compiler, file, "-o", destination, NULL};
 exec(command);
 print_exec(command);
-	if(IS_PATH_EXIST(destination)){
+}
+  if(IS_PATH_EXIST(destination)){
 NOM_LOG(NOM_DEBUG, "COMPILED %s", file);
 	} else{
 NOM_LOG(NOM_DEBUG, "COULDNT COMPILE %s", file);
-	}
+	return 0;
+  }
 }
 return 1;
 }
@@ -480,7 +498,7 @@ if(origin==NULL || destination==NULL || compiler==NULL || extension==NULL){
 }
 va_list args;
 va_start(args, extension);
-unsigned int flagc;
+unsigned int flagc=0;
 if(flags!=NULL) flagc=va_arg(args, int);
 struct dirent *dirent;
 DIR* source_dir;
