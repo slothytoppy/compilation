@@ -1,4 +1,4 @@
-#ifndef NOMAKE_IMPLEMENTATION 
+#ifndef NOM_IMPLEMENTATION 
 char* gcwd(void); // gets the cwd
 char* upcwd(char* str1, char* str2); // if str1 is ../dir, it will move what is after the ../ into str2, if str2 is null it returns str1 
 unsigned int exec(char* args[]); // is a wrapper for execvp 
@@ -25,7 +25,7 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, const 
 unsigned int renameold(char* file);
 #endif
 
-#ifdef NOMAKE_IMPLEMENTATION 
+#ifdef NOM_IMPLEMENTATION 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -92,17 +92,25 @@ void nom_cmd_append(Nom_cmd* cmd, char* item){
   cmd->count+=1;
   cmd->capacity=DEFAULT_CAP;
   cmd->items=malloc(cmd->count*sizeof(cmd->items));
+  if(cmd->items==NULL) goto items_null;
   cmd->items[cmd->count-1]=item; 
   }
   else{
   cmd->count+=1;
   cmd->items=realloc(cmd->items, cmd->count*sizeof(cmd->items));
-  cmd->items[cmd->count-1]=item; 
+  if(cmd->items==NULL) goto items_null;
+  cmd->items[cmd->count-1]=item;  
   }
   if(cmd->count>=cmd->capacity){
   cmd->capacity*=2;
   cmd->items=realloc(cmd->items, cmd->capacity*sizeof(char*));
+  if(cmd->items==NULL) goto items_null;
   }
+items_null:
+   if(cmd->items==NULL){ 
+    nom_log(NOM_PANIC, "could not allocate enough memory for cmd");
+    exit(1);
+   }
 }
 
 void nom_cmd_append_null(Nom_cmd* cmd){
@@ -178,21 +186,46 @@ unsigned int exec(char* args[]){
     printf("forking failed\n");
   return 0;
   }
-  wait(&child_status);
+  if(waitpid(id, &child_status, 0)<0) return 0;
   return 1;
 }
 
-unsigned int nom_cmd_compile(Nom_cmd* cmd){
-if(cmd->count<=0) return 0;
-if(cmd->items[cmd->count]!=NULL){
-nom_log(NOM_PANIC, "cmd is not null terminated");
-return 0;
+unsigned int nom_run_async(Nom_cmd cmd){
+  if(cmd.count<=0) return 0;
+  if(cmd.items[cmd.count]!=NULL){
+    nom_cmd_append(&cmd, NULL);
+    // nom_cmd_append(&cmd, NULL);
+  }
+  pid_t pid=fork();
+  if(pid<0){
+    nom_log(NOM_PANIC, "fork failed in nom_run_async");
+    return 0;
+  }
+  if(pid==0){
+    if(!execvp(cmd.items[0], cmd.items)){
+      nom_log(NOM_PANIC, "could not execute child process");
+      exit(1);
+    }
+    if(0){
+      nom_log(NOM_PANIC, "unreachable in nom_run_async");
+      exit(1);
+    }
+  }
+  printf("executed: ");
+  int i;
+  for(i=0; i<cmd.count-1; i++){
+  // printf("%d\n", cmd.count);
+  printf("%s ", cmd.items[i]);
+  }
+  return pid;
 }
-if(exec(cmd->items)){
-  nom_log(NOM_INFO, "compiled %s %s %s", cmd->items[0], cmd->items[cmd->count-3], cmd->items[cmd->count-1]);
-  return 1;
-}
-return 0;
+
+unsigned int nom_run_sync(Nom_cmd cmd){
+if(cmd.count<=0) return 0;
+int child_status;
+pid_t id=nom_run_async(cmd);
+if(waitpid(id, &child_status, 0)<0) return 0;
+return 1;
 }
 
 unsigned int run_args(char* pathname[]){
@@ -423,7 +456,7 @@ nom_cmd_append(&cmd, compiler);
 nom_cmd_append(&cmd, file);
 nom_cmd_append(&cmd, "-o");
 nom_cmd_append(&cmd, base(file));
-nom_cmd_compile(&cmd);
+nom_run_sync(cmd);
 nom_log(NOM_INFO, "compiled %s %s %s", compiler, file, base(file));
 return 1;
 }
@@ -740,6 +773,7 @@ return 1;
 
 unsigned int needs_rebuild(char* str1, char* str2){
   if(!str1 || !str2) return 0;
+  if(*str1==' ' || *str2==' ') return 0;
 	struct stat fi;
   if(stat(str1, &fi)<0){
     fprintf(stderr, "%s doesnt exist\n", str1); 
@@ -752,7 +786,31 @@ unsigned int needs_rebuild(char* str1, char* str2){
   return source_time>binary_time;
 }
 
-// TODO get the ability to use the last succesful build in case the current one fails, this half works right now fix it soon
+Nom_cmd needs_rebuild1(char* input_path, char** output_paths, unsigned int count){
+  Nom_cmd null={0};
+  if(!input_path || !output_paths) return null;
+
+  struct stat fi = {0};
+  if(stat(input_path, &fi)<0){
+        nom_log(NOM_WARN, "could not stat %s %s", input_path, strerror(errno));
+        return null;
+  } 
+  unsigned int input_time=fi.st_mtime;
+  Nom_cmd cmd={0};
+  for(int i=0; i<count; i++){
+      if(stat(output_paths[i], &fi)<0){
+        nom_log(NOM_WARN, "could not stat %s %s", output_paths, strerror(errno));
+        return null;
+      }
+    unsigned int output_time=fi.st_mtime;
+    printf("%d ", i); 
+    if(output_time>input_time){
+    nom_cmd_append(&cmd, output_paths[i]);
+    }
+  }
+  return cmd;
+}
+
 unsigned int rebuild(char* file, char* compiler){
 if(file==NULL || compiler==NULL) return 0;
 char* bin=base(file);
@@ -775,13 +833,39 @@ if(needs_rebuild(file, bin)){
     nom_log(NOM_INFO, "compiled %s %s %s", command[0], command[2], command[4]);
     run(bin);
     exit(0);
-  }
+  } 
 }
   return 1;
 }
 
+int UPDATE_PATH_TIME(char* path1, char* path2){
+  if(!path1 || !path2) return 0;
+  struct stat fi;
+  struct utimbuf ntime;
+  ntime.actime=ntime.modtime=time(NULL);
+  if(stat(path1, &fi)<0){
+    fprintf(stderr, "%s doesnt exist\n", path1);
+    return 0;
+  }
+  unsigned int path1_time=fi.st_mtime;
+  if(stat(path2, &fi)<0){
+    fprintf(stderr, "%s doesnt exist\n", path2);
+    return 0;
+  }
+  unsigned int path2_time=fi.st_mtime;
+  if(utime(path1, &ntime)<0){
+    fprintf(stderr, "could not update %s's timestamp\n", path1);
+    return 0;
+  }
+  if(utime(path2, &ntime)<0){
+    fprintf(stderr, "could not update %s's timestamp\n", path2);
+    return 0;
+  }
+  return path1_time==path2_time;
+}
+
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
-  if(!lib || !file || !compiler) return 0;
+  if(!lib || !file) return 0;
   struct stat fi;
   struct utimbuf ntime;
   ntime.actime=ntime.modtime=time(NULL);
@@ -792,16 +876,16 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(stat(file, &fi)<0){
     fprintf(stderr, "%s doesnt exist\n", file);
   }
+  Nom_cmd cmd={0};
+  nom_cmd_append(&cmd, compiler);
+  nom_cmd_append(&cmd, "-ggdb");
+  nom_cmd_append(&cmd, file);
+  nom_cmd_append(&cmd, "-o");
+  nom_cmd_append(&cmd, base(file));
   unsigned int file_time=fi.st_mtime;
   if(lib_time>file_time){
-  char* command[]={compiler, "-ggdb", file, "-o", base(file), NULL};
-    if(exec(command)){
-      nom_log(NOM_INFO, "compiled %s %s -o %s", command[0], command[2], command[4]);
-        if(utime(file, &ntime)<0){
-          fprintf(stderr, "could not update %s's timestamp\n", file);
-          return 0;
-        }
-      return 1;
+    if(nom_run_async(cmd)){ 
+    return 1;
     }
   }
   return 0;
@@ -811,9 +895,9 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
 #define GO_REBUILD(argc, argv, compiler){																							\
 	char* file=__FILE__;																																\
   if(file==NULL || argc==0)	return 0;																									\
-  if(is_path1_modified_after_path2(file, argv[0])){																		\
+  if(needs_rebuild(file, argv[0])){																		                \
 	  renameold(argv[0]);																																\
-    char* command[]={compiler, "-o", base(file), file, NULL};													\
+    char* command[]={compiler, "-ggdb", "-o", base(file), file, NULL};								\
     if(exec(command)){                                                                \
 		nom_log(NOM_INFO, "compiled %s running %s", file, argv[0]);                       \
     run(argv[0]);																																	    \
@@ -823,5 +907,4 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
 }                                                                                     \
 }
 
-
-#endif // COMPILATION_IMPLEMENTATION
+#endif // NOM_IMPLEMENTATION
