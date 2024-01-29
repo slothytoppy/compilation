@@ -190,7 +190,6 @@ unsigned int exec(char* args[]){
   return 1;
 }
 
-<<<<<<< HEAD:nomake.h
 unsigned int nom_cmd_compile(Nom_cmd* cmd){
 if(cmd->count<=0) return 0;
 if(cmd->items[cmd->count]!=NULL){
@@ -202,7 +201,6 @@ if(exec(cmd->items)){
   return 1;
 }
 return 0;
-=======
 unsigned int nom_run_async(Nom_cmd cmd){
   if(cmd.count<=0) return 0;
   if(cmd.items[cmd.count]!=NULL){
@@ -239,7 +237,6 @@ int child_status;
 pid_t id=nom_run_async(cmd);
 if(waitpid(id, &child_status, 0)<0) return 0;
 return 1;
->>>>>>> main:nom.h
 }
 
 unsigned int run_args(char* pathname[]){
@@ -856,10 +853,8 @@ if(needs_rebuild(file, bin)){
   return 1;
 }
 
-<<<<<<< HEAD:nomake.h
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(!lib || !file || !compiler) return 0;
-=======
 int UPDATE_PATH_TIME(char* path1, char* path2){
   if(!path1 || !path2) return 0;
   struct stat fi;
@@ -888,7 +883,6 @@ int UPDATE_PATH_TIME(char* path1, char* path2){
 
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(!lib || !file) return 0;
->>>>>>> main:nom.h
   struct stat fi;
   struct utimbuf ntime;
   ntime.actime=ntime.modtime=time(NULL);
@@ -899,7 +893,6 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(stat(file, &fi)<0){
     fprintf(stderr, "%s doesnt exist\n", file);
   }
-<<<<<<< HEAD:nomake.h
   unsigned int file_time=fi.st_mtime;
   if(lib_time>file_time){
   char* command[]={compiler, "-ggdb", file, "-o", base(file), NULL};
@@ -910,7 +903,6 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
           return 0;
         }
       return 1;
-=======
   Nom_cmd cmd={0};
   nom_cmd_append(&cmd, compiler);
   nom_cmd_append(&cmd, "-ggdb");
@@ -921,7 +913,6 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(lib_time>file_time){
     if(nom_run_async(cmd)){ 
     return 1;
->>>>>>> main:nom.h
     }
   }
   return 0;
@@ -943,9 +934,4 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
 }                                                                                     \
 }
 
-<<<<<<< HEAD:nomake.h
-
-#endif // COMPILATION_IMPLEMENTATION
-=======
 #endif // NOM_IMPLEMENTATION
->>>>>>> main:nom.h
