@@ -201,11 +201,16 @@ if(exec(cmd->items)){
   return 1;
 }
 return 0;
+}
+
 unsigned int nom_run_async(Nom_cmd cmd){
   if(cmd.count<=0) return 0;
   if(cmd.items[cmd.count]!=NULL){
     nom_cmd_append(&cmd, NULL);
-    // nom_cmd_append(&cmd, NULL);
+  }
+  if(cmd.items[cmd.count]!=NULL){
+  nom_log(NOM_PANIC, "could not null terminate cmd");
+  exit(1);
   }
   pid_t pid=fork();
   if(pid<0){
@@ -224,7 +229,7 @@ unsigned int nom_run_async(Nom_cmd cmd){
   }
   printf("executed: ");
   int i;
-  for(i=0; i<cmd.count-1; i++){
+  for(i=0; i<cmd.count; i++){
   // printf("%d\n", cmd.count);
   printf("%s ", cmd.items[i]);
   }
@@ -467,11 +472,8 @@ nom_cmd_append(&cmd, compiler);
 nom_cmd_append(&cmd, file);
 nom_cmd_append(&cmd, "-o");
 nom_cmd_append(&cmd, base(file));
-<<<<<<< HEAD:nomake.h
 nom_cmd_compile(&cmd);
-=======
 nom_run_sync(cmd);
->>>>>>> main:nom.h
 nom_log(NOM_INFO, "compiled %s %s %s", compiler, file, base(file));
 return 1;
 }
@@ -880,7 +882,9 @@ int UPDATE_PATH_TIME(char* path1, char* path2){
   }
   return path1_time==path2_time;
 }
+}
 
+/*
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(!lib || !file) return 0;
   struct stat fi;
@@ -916,7 +920,10 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
     }
   }
   return 0;
+} 
 }
+}
+*/
 
 // simple rebuild implementation but should always work
 #define GO_REBUILD(argc, argv, compiler){																							\
@@ -931,7 +938,6 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
 		exit(0);																																				  \
 		}                                                                                 \
 	}																																										\
-}                                                                                     \
-}
+}                                                                                     
 
 #endif // NOM_IMPLEMENTATION
