@@ -1,5 +1,5 @@
-#define NOMAKE_IMPLEMENTATION 
-#include "nomake.h"
+#define NOM_IMPLEMENTATION 
+#include "nom.h"
 
 int main(int argc, char* argv[]){
 rebuild(__FILE__, "gcc");

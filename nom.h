@@ -467,11 +467,8 @@ nom_cmd_append(&cmd, compiler);
 nom_cmd_append(&cmd, file);
 nom_cmd_append(&cmd, "-o");
 nom_cmd_append(&cmd, base(file));
-<<<<<<< HEAD:nomake.h
 nom_cmd_compile(&cmd);
-=======
 nom_run_sync(cmd);
->>>>>>> main:nom.h
 nom_log(NOM_INFO, "compiled %s %s %s", compiler, file, base(file));
 return 1;
 }
@@ -879,6 +876,7 @@ int UPDATE_PATH_TIME(char* path1, char* path2){
     return 0;
   }
   return path1_time==path2_time;
+  }
 }
 
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
@@ -917,6 +915,7 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   }
   return 0;
 }
+
 
 // simple rebuild implementation but should always work
 #define GO_REBUILD(argc, argv, compiler){																							\
