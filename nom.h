@@ -855,6 +855,7 @@ if(needs_rebuild(file, bin)){
   return 1;
 }
 
+/*
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(!lib || !file || !compiler) return 0;
 int UPDATE_PATH_TIME(char* path1, char* path2){
@@ -883,8 +884,8 @@ int UPDATE_PATH_TIME(char* path1, char* path2){
   return path1_time==path2_time;
   }
 }
+*/
 
-/*
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(!lib || !file) return 0;
   struct stat fi;
@@ -923,7 +924,6 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
 } 
 }
 }
-*/
 
 
 // simple rebuild implementation but should always work
