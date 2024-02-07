@@ -122,14 +122,13 @@ void nom_cmd_append_null(Nom_cmd* cmd){
   }
 }
 
-void nom_cmd_append_many(Nom_cmd* cmd, unsigned int count, ...){
-  printf("dont use for commands");
-  exit(1);
+void nom_cmd_append_many(Nom_cmd* cmd, unsigned count, ...){
   va_list args;
   va_start(args, count);
+  char* item=va_arg(args, char*);
   int i=0;
   while(i<count){
-  char* item=va_arg(args, char*);
+  item=va_arg(args, char*);
   nom_cmd_append(cmd, item);
   i++;
   }
@@ -230,7 +229,7 @@ unsigned int nom_run_async(Nom_cmd cmd){
   printf("executed: ");
   int i;
   for(i=0; i<cmd.count; i++){
-  // printf("%d\n", cmd.count);
+  printf("count:%d ", cmd.count);
   printf("%s ", cmd.items[i]);
   }
   return pid;
