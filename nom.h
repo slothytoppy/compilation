@@ -240,8 +240,11 @@ unsigned int nom_run_sync(Nom_cmd cmd){
 if(cmd.count<=0) return 0;
 int child_status;
 pid_t id=nom_run_async(cmd);
-if(waitpid(id, &child_status, 0)<0) return 0;
-return 1;
+if(waitpid(id, &child_status, 0)<0){
+if(WIFEXITED(child_status)){
+return WEXITSTATUS(child_status);
+}
+}
 }
 
 unsigned int run_args(char* pathname[]){
@@ -855,6 +858,7 @@ if(needs_rebuild(file, bin)){
   return 1;
 }
 
+/*
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(!lib || !file || !compiler) return 0;
 int UPDATE_PATH_TIME(char* path1, char* path2){
@@ -883,8 +887,8 @@ int UPDATE_PATH_TIME(char* path1, char* path2){
   return path1_time==path2_time;
 }
 }
+*/
 
-/*
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(!lib || !file) return 0;
   struct stat fi;
@@ -915,7 +919,7 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   nom_cmd_append(&cmd, base(file));
   unsigned int file_time=fi.st_mtime;
   if(lib_time>file_time){
-    if(nom_run_async(cmd)){ 
+    if(nom_run_sync(cmd)){ 
     return 1;
     }
   }
@@ -923,7 +927,6 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
 } 
 }
 }
-*/
 
 // simple rebuild implementation but should always work
 #define GO_REBUILD(argc, argv, compiler){																							\
