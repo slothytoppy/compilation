@@ -1,4 +1,5 @@
-#ifndef NOM_IMPLEMENTATION 
+/*
+#ifndef NOM_IMPLEMENTATION
 char* gcwd(void); // gets the cwd
 char* upcwd(char* str1, char* str2); // if str1 is ../dir, it will move what is after the ../ into str2, if str2 is null it returns str1 
 unsigned int exec(char* args[]); // is a wrapper for execvp 
@@ -25,7 +26,8 @@ unsigned int compile_dir(char* origin, char* destination, char* compiler, const 
 unsigned int renameold(char* file);
 #endif
 
-#ifdef NOM_IMPLEMENTATION 
+#ifdef NOM_IMPLEMENTATION
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -39,6 +41,7 @@ unsigned int renameold(char* file);
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
+
 
 typedef const char* Cstr;
 
@@ -85,19 +88,19 @@ typedef struct{
 void nom_cmd_append(Nom_cmd *cmd, char *item) {
   if (cmd->count == 0) {
     cmd->capacity = DEFAULT_CAP;
-    cmd->items = malloc(sizeof(cmd->items));
+    cmd->items = (char**)malloc(sizeof(cmd->items));
     cmd->items[0] = item;
     cmd->count++;
     return;
   }
 
   cmd->count += 1;
-  cmd->items = realloc(cmd->items, cmd->count * sizeof(cmd->items));
+  cmd->items = (char**)realloc(cmd->items, cmd->count * sizeof(cmd->items));
   cmd->items[cmd->count - 1] = item;
 
   if (cmd->count >= cmd->capacity) {
     cmd->capacity *= 2;
-    cmd->items = realloc(cmd->items, cmd->capacity * sizeof(char *));
+    cmd->items = (char**)realloc(cmd->items, cmd->capacity * sizeof(char *));
     if (cmd->items == NULL) {
       nom_log(NOM_PANIC, "could not allocate enough memory for cmd");
       exit(1);
@@ -135,13 +138,13 @@ return getcwd(buff, sizeof(buff));
 }
 
 char* upcwd(char* str1, char* str2){
-if(str2==NULL) str2=calloc(1, PATH_MAX);
+if(str2==NULL) str2=(char*)calloc(1, PATH_MAX);
 if(str1==NULL) return 0;
 char* cwd=gcwd();
 if(strncmp(str1, "../", 3)==0){
-char* cbuff=calloc(1, strlen(str1));
+char* cbuff=(char*)calloc(1, strlen(str1));
 strcat(cbuff, str1);
-char* buff=calloc(1, PATH_MAX);
+char* buff=(char*)calloc(1, PATH_MAX);
 char* sbuff=strrchr(cwd, '/');
 strncpy(buff, str1+3, strlen(cwd)-strlen(sbuff));
 strncpy(str2, cwd, strlen(cwd)-strlen(sbuff));
@@ -256,6 +259,7 @@ return WEXITSTATUS(child_status);
   }
 }
 }
+return 0;
 }
 
 unsigned int run_args(char* pathname[]){
@@ -292,7 +296,7 @@ return 1;
 return 0;
 }
 
-const char* ext(Cstr filename){
+const char* ext(char* filename){
 if(!filename) return NULL;
 unsigned int i;
 unsigned int sz=len(filename);
@@ -310,7 +314,7 @@ char* base(Cstr file){
   if (file==NULL) return NULL;
   char *retStr;
   char *lastExt;
-  if ((retStr = malloc (strlen (file) + 1)) == NULL) return NULL;
+  if ((retStr = (char*)malloc (strlen (file) + 1)) == NULL) return NULL;
   strcpy (retStr, file);
   lastExt = strrchr (retStr, '.');
   if (lastExt != NULL)
@@ -477,7 +481,7 @@ unsigned int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path){
 
 unsigned int renameold(char* file){
 if(!file) return 0;
-char* old=calloc(1, PATH_MAX);
+char* old=(char*)calloc(1, PATH_MAX);
 strcat(old, file);
 strcat(old, ".old");
 rename(file, old);
@@ -529,11 +533,13 @@ unsigned int rebuild(char* file, char* compiler){
 if(file==NULL || compiler==NULL) return 0;
 char* bin=base(file);
 char* old_path=strcat(base(file), ".old");
-char* command[]={compiler, "-ggdb", file, "-o", base(file), NULL};
+Nom_cmd cmd={0};
+nom_cmd_append_many(&cmd, 6, compiler, "-ggdb", file, "-o", base(file));
+//char* command[]={compiler, "-ggdb", file, "-o", base(file), NULL};
 if(needs_rebuild(file, bin)){
   rename(bin, old_path);
   nom_log(NOM_INFO, "renamed %s to %s", bin, old_path);
-  if(exec(command)){
+  if(nom_run_sync(cmd)){
     if(!IS_PATH_EXIST(bin)){ 
       if(!IS_PATH_EXIST(old_path)){
       nom_log(NOM_WARN, "%s does not exist, no previous rollback, exiting", old_path);
@@ -544,7 +550,7 @@ if(needs_rebuild(file, bin)){
       run(bin);
       exit(0);
     }
-    nom_log(NOM_INFO, "compiled %s %s %s", command[0], command[2], command[4]);
+    //nom_log(NOM_INFO, "compiled %s %s %s", command[0], command[2], command[4]);
     run(bin);
     exit(0);
   } 
@@ -599,16 +605,6 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(stat(file, &fi)<0){
     fprintf(stderr, "%s doesnt exist\n", file);
   }
-  unsigned int file_time=fi.st_mtime;
-  if(lib_time>file_time){
-  char* command[]={compiler, "-ggdb", file, "-o", base(file), NULL};
-    if(exec(command)){
-      nom_log(NOM_INFO, "compiled %s %s -o %s", command[0], command[2], command[4]);
-        if(utime(file, &ntime)<0){
-          fprintf(stderr, "could not update %s's timestamp\n", file);
-          return 0;
-        }
-      return 1;
   Nom_cmd cmd={0};
   nom_cmd_append(&cmd, compiler);
   nom_cmd_append(&cmd, "-ggdb");
@@ -617,14 +613,17 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   nom_cmd_append(&cmd, base(file));
   unsigned int file_time=fi.st_mtime;
   if(lib_time>file_time){
-    if(nom_run_sync(cmd)){ 
+    if(nom_run_sync(cmd)){
+     if(utime(file, &ntime)<0){
+          fprintf(stderr, "could not update %s's timestamp\n", file);
+          return 0;
+        }
+
     return 1;
     }
   }
   return 0;
 } 
-}
-}
 
 // simple rebuild implementation but should always work
 #define GO_REBUILD(argc, argv, compiler){																							\
@@ -639,6 +638,6 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
 		exit(0);																																				  \
 		}                                                                                 \
 	}																																										\
-}                                                                                     
+}    
 
-#endif // NOM_IMPLEMENTATION
+//#endif
