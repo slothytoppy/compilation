@@ -240,8 +240,11 @@ unsigned int nom_run_sync(Nom_cmd cmd){
 if(cmd.count<=0) return 0;
 int child_status;
 pid_t id=nom_run_async(cmd);
-if(waitpid(id, &child_status, 0)<0) return 0;
-return 1;
+if(waitpid(id, &child_status, 0)<0){
+if(WIFEXITED(child_status)){
+return WEXITSTATUS(child_status);
+}
+}
 }
 
 unsigned int run_args(char* pathname[]){
@@ -855,11 +858,11 @@ if(needs_rebuild(file, bin)){
   return 1;
 }
 
-int UPDATE_PATH_TIME(char* path1, char* path2){
+int update_path_time(char* path1, char* path2){
   if(!path1 || !path2) return 0;
   struct stat fi;
   struct utimbuf ntime;
-  ntime.actime=ntime.modtime=time(NULL);
+  ntime.actime=ntime.modtime=time(null);
   if(stat(path1, &fi)<0){
     fprintf(stderr, "%s doesnt exist\n", path1);
     return 0;
@@ -880,12 +883,17 @@ int UPDATE_PATH_TIME(char* path1, char* path2){
   }
   return path1_time==path2_time;
 }
+<<<<<<< head
+=======
+}
+*/
+>>>>>>> d63d15c69cb97eaa79fe536966d82e4fbc6c450f
 
-int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
+int is_library_modified(char* lib, char* file, char* compiler){
   if(!lib || !file) return 0;
   struct stat fi;
   struct utimbuf ntime;
-  ntime.actime=ntime.modtime=time(NULL);
+  ntime.actime=ntime.modtime=time(null);
   if(stat(lib, &fi)<0){
     fprintf(stderr, "%s doesnt exist\n", lib); 
   }
@@ -895,15 +903,15 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   }
   unsigned int file_time=fi.st_mtime;
   if(lib_time>file_time){
-  char* command[]={compiler, "-ggdb", file, "-o", base(file), NULL};
+  char* command[]={compiler, "-ggdb", file, "-o", base(file), null};
     if(exec(command)){
-      nom_log(NOM_INFO, "compiled %s %s -o %s", command[0], command[2], command[4]);
+      nom_log(nom_info, "compiled %s %s -o %s", command[0], command[2], command[4]);
         if(utime(file, &ntime)<0){
           fprintf(stderr, "could not update %s's timestamp\n", file);
           return 0;
         }
       return 1;
-  Nom_cmd cmd={0};
+  nom_cmd cmd={0};
   nom_cmd_append(&cmd, compiler);
   nom_cmd_append(&cmd, "-ggdb");
   nom_cmd_append(&cmd, file);
@@ -911,7 +919,7 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   nom_cmd_append(&cmd, base(file));
   unsigned int file_time=fi.st_mtime;
   if(lib_time>file_time){
-    if(nom_run_async(cmd)){ 
+    if(nom_run_sync(cmd)){ 
     return 1;
     }
   }
