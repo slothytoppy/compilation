@@ -229,7 +229,7 @@ unsigned int nom_run_async(Nom_cmd cmd){
   }
   printf("executed: ");
   int i;
-  for(i=0; i<cmd.count; i++){
+  for(i=0; i<cmd.count-1; i++){
   // printf("%d\n", cmd.count);
   printf("%s ", cmd.items[i]);
   }
@@ -855,8 +855,6 @@ if(needs_rebuild(file, bin)){
   return 1;
 }
 
-int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
-  if(!lib || !file || !compiler) return 0;
 int UPDATE_PATH_TIME(char* path1, char* path2){
   if(!path1 || !path2) return 0;
   struct stat fi;
@@ -882,9 +880,7 @@ int UPDATE_PATH_TIME(char* path1, char* path2){
   }
   return path1_time==path2_time;
 }
-}
 
-/*
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(!lib || !file) return 0;
   struct stat fi;
@@ -923,7 +919,6 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
 } 
 }
 }
-*/
 
 // simple rebuild implementation but should always work
 #define GO_REBUILD(argc, argv, compiler){																							\
