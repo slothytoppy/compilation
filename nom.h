@@ -883,11 +883,6 @@ int update_path_time(char* path1, char* path2){
   }
   return path1_time==path2_time;
 }
-<<<<<<< head
-=======
-}
-*/
->>>>>>> d63d15c69cb97eaa79fe536966d82e4fbc6c450f
 
 int is_library_modified(char* lib, char* file, char* compiler){
   if(!lib || !file) return 0;
