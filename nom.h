@@ -40,11 +40,6 @@ unsigned int renameold(char* file);
 #include <fcntl.h>
 #include <stdarg.h>
 
-#define print_source(){            \
-  char* file=__FILE__;             \
-  nom_log(NOM_INFO, "SOURCE %s", file);   \
-}
-
 typedef const char* Cstr;
 
 enum log_level{
@@ -87,44 +82,34 @@ typedef struct{
 
 #define DEFAULT_CAP 256
 
-void nom_cmd_append(Nom_cmd* cmd, char* item){ 
-  if(cmd->count==0){
-  cmd->count+=1;
-  cmd->capacity=DEFAULT_CAP;
-  cmd->items=malloc(cmd->count*sizeof(cmd->items));
-  if(cmd->items==NULL) goto items_null;
-  cmd->items[cmd->count-1]=item; 
+void nom_cmd_append(Nom_cmd *cmd, char *item) {
+  if (cmd->count == 0) {
+    cmd->capacity = DEFAULT_CAP;
+    cmd->items = malloc(sizeof(cmd->items));
+    cmd->items[0] = item;
+    cmd->count++;
+    return;
   }
-  else{
-  cmd->count+=1;
-  cmd->items=realloc(cmd->items, cmd->count*sizeof(cmd->items));
-  if(cmd->items==NULL) goto items_null;
-  cmd->items[cmd->count-1]=item;  
+
+  cmd->count += 1;
+  cmd->items = realloc(cmd->items, cmd->count * sizeof(cmd->items));
+  cmd->items[cmd->count - 1] = item;
+
+  if (cmd->count >= cmd->capacity) {
+    cmd->capacity *= 2;
+    cmd->items = realloc(cmd->items, cmd->capacity * sizeof(char *));
+    if (cmd->items == NULL) {
+      nom_log(NOM_PANIC, "could not allocate enough memory for cmd");
+      exit(1);
+    }
   }
-  if(cmd->count>=cmd->capacity){
-  cmd->capacity*=2;
-  cmd->items=realloc(cmd->items, cmd->capacity*sizeof(char*));
-  if(cmd->items==NULL) goto items_null;
-  }
-items_null:
-   if(cmd->items==NULL){ 
-    nom_log(NOM_PANIC, "could not allocate enough memory for cmd");
-    exit(1);
-   }
 }
 
 void nom_cmd_append_null(Nom_cmd* cmd){
-  if(cmd->count<=0){
-  nom_log(NOM_WARN, "cmd is unitialized or count is set to 0");
-  } else{
-  cmd->items=realloc(cmd->items, cmd->count*sizeof(char*));
-  cmd->items[cmd->count]=NULL;
-  }
+  nom_cmd_append(cmd, NULL);
 }
 
-void nom_cmd_append_many(Nom_cmd* cmd, unsigned int count, ...){
-  printf("dont use for commands");
-  exit(1);
+void nom_cmd_append_many(Nom_cmd* cmd, unsigned count, ...){
   va_list args;
   va_start(args, count);
   int i=0;
@@ -190,20 +175,45 @@ unsigned int exec(char* args[]){
   return 1;
 }
 
-unsigned int nom_cmd_compile(Nom_cmd* cmd){
-if(cmd->count<=0) return 0;
-if(cmd->items[cmd->count]!=NULL){
-nom_log(NOM_PANIC, "cmd is not null terminated");
-return 0;
-}
-if(exec(cmd->items)){
-  nom_log(NOM_INFO, "compiled %s %s %s", cmd->items[0], cmd->items[cmd->count-3], cmd->items[cmd->count-1]);
-  return 1;
-}
-return 0;
+unsigned int nom_run_async(Nom_cmd cmd) {
+  if (cmd.count <= 0) {
+    return 0;
+  }
+if (cmd.items[cmd.count] != NULL) {
+    nom_cmd_append(&cmd, NULL);
+  }
+  if (cmd.items[cmd.count] != NULL) {
+    nom_log(NOM_PANIC, "could not null terminate cmd");
+    exit(1);
+  }
+  pid_t pid = fork();
+  if (pid < 0) {
+    nom_log(NOM_PANIC, "fork failed in nom_run_async");
+    return 0;
+  }
+
+  switch (pid) {
+  case -1:
+    nom_log(NOM_PANIC, "fork failed in nom_run_async");
+    return 0;
+  case 0:
+    for (int i = 0; i < cmd.count; i++) {
+      printf("%s ", cmd.items[i]);
+      if (i == cmd.count - 1) {
+        printf("\n");
+      }
+    }
+  }
+
+  if (execvp(cmd.items[0], cmd.items) == -1) {
+    nom_log(NOM_PANIC, "could not execute child process");
+    exit(1);
+  }
+
+  return pid;
 }
 
-unsigned int nom_run_async(Nom_cmd cmd){
+unsigned int nom_run_async1(Nom_cmd cmd){
   if(cmd.count<=0) return 0;
   if(cmd.items[cmd.count]!=NULL){
     nom_cmd_append(&cmd, NULL);
@@ -218,20 +228,18 @@ unsigned int nom_run_async(Nom_cmd cmd){
     return 0;
   }
   if(pid==0){
-    if(!execvp(cmd.items[0], cmd.items)){
+    if(execvp(cmd.items[0], cmd.items)<0){
       nom_log(NOM_PANIC, "could not execute child process");
       exit(1);
     }
-    if(0){
-      nom_log(NOM_PANIC, "unreachable in nom_run_async");
-      exit(1);
-    }
   }
+  if(pid>0){
   printf("executed: ");
   int i;
   for(i=0; i<cmd.count-1; i++){
   // printf("%d\n", cmd.count);
   printf("%s ", cmd.items[i]);
+  }
   }
   return pid;
 }
@@ -240,9 +248,13 @@ unsigned int nom_run_sync(Nom_cmd cmd){
 if(cmd.count<=0) return 0;
 int child_status;
 pid_t id=nom_run_async(cmd);
-if(waitpid(id, &child_status, 0)<0){
+if(waitpid(id, &child_status, 0)){
 if(WIFEXITED(child_status)){
+  if(WEXITSTATUS(child_status)==0){
 return WEXITSTATUS(child_status);
+  } else{
+  return 1;
+  }
 }
 }
 }
@@ -462,323 +474,6 @@ unsigned int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path){
   }
   unsigned int binary_time=fi.st_mtime;
   return source_time>binary_time;
-}
-
-unsigned int print_exec(char* args[]){
-  printf("executed:%s source:%s binary:%s\n", args[0], args[1], args[3]);
-  return 1;
-}
-
-unsigned int compile_simple(char* file, char* compiler){
-Nom_cmd cmd={0};
-nom_cmd_append(&cmd, compiler);
-nom_cmd_append(&cmd, file);
-nom_cmd_append(&cmd, "-o");
-nom_cmd_append(&cmd, base(file));
-nom_cmd_compile(&cmd);
-nom_run_sync(cmd);
-nom_log(NOM_INFO, "compiled %s %s %s", compiler, file, base(file));
-return 1;
-}
-
-unsigned int compile_file(char* compiler, char* flags[], char* file, char* destination, const char* extension, ...){
-if(file==NULL || destination==NULL || compiler==NULL || extension==NULL){
-    fprintf(stderr, "origin, destination, compiler or extension was null\n");
-    return 0;
-}
-va_list args;
-va_start(args, extension);
-if(strcmp(ext(file), extension)==0){
-if(flags!=NULL){
-int flagc=va_arg(args, int);
-unsigned int i=0;
-char** command=calloc(5+flagc, PATH_MAX);
-command[0]=compiler;
-command[1]="-o";
-command[2]=destination;
-command[3]=file;
-// command=(char**)reallocarray(command, 4+flagc+1, sizeof(char*));
-if(command==NULL) exit(1);
-for(i=0; i<flagc; i++) command[4+i]=flags[i];
-for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
-nom_log(NOM_DEBUG, "flagc:%d\n", 4+flagc);
-if(command[2]==NULL || command[3]==NULL) exit(1);
-command[4+flagc+1]=NULL;
-exec(command);
-} else{
-char* command[]={compiler, file, "-o", destination, NULL};
-exec(command);
-print_exec(command);
-}
-  if(IS_PATH_EXIST(destination)){
-nom_log(NOM_DEBUG, "COMPILED %s", file);
-	} else{
-nom_log(NOM_DEBUG, "COULDNT COMPILE %s", file);
-	return 0;
-  }
-}
-return 1;
-}
-
-unsigned int compile_targets(unsigned int sz, char* files[], char* destination, char* compiler, Cstr extension){
-if(files==NULL || destination==NULL || compiler==NULL || extension==NULL){
-    fprintf(stderr, "file, destination, compiler or extension was null\n");
-    return 0;
-  }
-  if(strcmp(*files, ".")==0){
-  fprintf(stderr, "file can not be only a dot\n");
-  return 0;
-  }
-  unsigned int i;
-  struct stat fi;
-  printf("DEBUG ELEMS:%d\n", sz); 
-  for(i=0; i<sz; i++){
-    if(strcmp(destination, ".")==0){
-      if(strcmp(ext(files[i]), extension)==0){
-  char* command[]={compiler, files[i], "-o", base(files[i]), NULL};
-  printf("FILE:%s BASE:%s\n", command[1], command[3]);
-      if(exec(command)){
-      print_exec(command);
-			}
-    } 
-    }
-		if(strcmp(destination, ".")!=0){
-			if(strcmp(ext(files[i]), extension)==0){
-  char* twd=calloc(1, PATH_MAX);
-  strcat(twd, destination); 
-  strcat(twd, "/");
-  strcat(twd, base(files[i]));
-  nom_log(NOM_DEBUG, "TWD %s", twd);
-  char* command[]={compiler, files[i], "-o", twd, NULL};
-			if(exec(command)){
-			print_exec(command);
-			free(twd);
-			} else{
-			free(twd);
-			}
-			}
-	  }
-  }
-  if(stat(base(*files), &fi)!=0){
-  fprintf(stderr, "%s wasnt compiled correctly\n", base(*files));
-  return 0;
-  }
-  return 1;
-}
-
-unsigned int compile(char* compiler, char* flags[], char* origin, char* destination, char* extension, ...){
-if(origin==NULL || destination==NULL || compiler==NULL || extension==NULL){
-    fprintf(stderr, "origin, destination, compiler or extension was null\n");
-    return 0;
-}
-va_list args;
-va_start(args, extension);
-unsigned int flagc=0;
-if(flags!=NULL) flagc=va_arg(args, int);
-struct dirent *dirent;
-DIR* source_dir;
-source_dir=opendir(origin);
-if(source_dir){
-	while((dirent=readdir(source_dir))!=NULL){
-    if(strcmp(dirent->d_name, ".")!=0 && strcmp(dirent->d_name, "..")!=0){
-			if(strcmp(ext(dirent->d_name), extension)==0){
-				char* orig_path=calloc(1, PATH_MAX);
-				char* dest_path=calloc(1, PATH_MAX);
-				if(strcmp(origin, ".")==0 && strcmp(destination, ".")==0){
-					nom_log(NOM_INFO, "D_NAME:%s\n", dirent->d_name);
-					nom_log(NOM_INFO, "BASE D_NAME:%s\n", base(dirent->d_name));
-					if(flags==NULL){
-					char* command[]={compiler, "-o", base(dirent->d_name), dirent->d_name, NULL};
-					exec(command);
-					} else{
-					unsigned int i=0;
-					char** command=calloc(5+flagc, PATH_MAX);
-					command[0]=compiler;
-					command[1]="-o";
-					command[2]=base(dirent->d_name);
-					command[3]=dirent->d_name;
-					// command=(char**)reallocarray(command, 4+flagc+1, sizeof(char*));
-					if(command==NULL) exit(1);
-					for(i=0; i<flagc; i++) command[4+i]=flags[i];
-					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
-					nom_log(NOM_DEBUG, "flagc:%d\n", 4+flagc);
-					if(command[2]==NULL || command[3]==NULL) exit(1);
-					command[4+flagc+1]=NULL;
-					exec(command);
-					}
-				}
-				if(strcmp(origin, ".")==0 && strcmp(destination, ".")!=0){
-					if(flags==NULL){
-					strcat(dest_path, destination);
-					if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
-					strcat(dest_path, base(dirent->d_name));
-					strcat(orig_path, dirent->d_name);
-					} else{
-					strcat(dest_path, destination);
-					if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
-					strcat(dest_path, base(dirent->d_name));
-					strcat(orig_path, dirent->d_name);
-					unsigned int i=0;
-					char** command=calloc(5+flagc, PATH_MAX);
-					command[0]=compiler;
-					command[1]="-o";
-					command[2]=dest_path;
-					command[3]=orig_path;
-					// command=(char**)reallocarray(command, 4+flagc+1, sizeof(char*));
-					if(command==NULL) exit(1);
-					for(i=0; i<flagc; i++) command[4+i]=flags[i];
-					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
-					nom_log(NOM_DEBUG, "flagc:%d\n", 4+flagc);
-					if(command[2]==NULL || command[3]==NULL) exit(1);
-					command[4+flagc+1]=NULL;
-					exec(command);
-					}
-				}
-				if(strcmp(origin, ".")!=0 && strcmp(destination, ".")==0){
-					if(flags==NULL){
-					strcat(dest_path, destination);
-					if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
-					strcat(dest_path, base(dirent->d_name));
-					strcat(orig_path, origin);
-					if(!ends_with(orig_path, '/')) strcat(orig_path, "/");
-					strcat(orig_path, dirent->d_name);
-					} else{
-					strcat(dest_path, destination);
-					if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
-					strcat(dest_path, base(dirent->d_name));
-					strcat(orig_path, origin);
-					if(!ends_with(orig_path, '/')) strcat(orig_path, "/");
-					strcat(orig_path, dirent->d_name);
-					unsigned int i=0;
-					char** command=calloc(5+flagc, PATH_MAX);
-					command[0]=compiler;
-					command[1]="-o";
-					command[2]=dest_path;
-					command[3]=orig_path;
-					// command=(char**)reallocarray(command, 4+flagc+1, sizeof(char*));
-					if(command==NULL) exit(1);
-					for(i=0; i<flagc; i++) command[4+i]=flags[i];
-					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
-					nom_log(NOM_DEBUG, "flagc:%d\n", 4+flagc);
-					if(command[2]==NULL || command[3]==NULL) exit(1);
-					command[4+flagc+1]=NULL;
-					exec(command);
-					}
-				}
-				if(strcmp(origin, ".")!=0 && strcmp(destination, ".")!=0){
-					if(flags==NULL){
-				strcat(dest_path, destination);
-				if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
-				strcat(dest_path, base(dirent->d_name));
-				strcat(orig_path, origin);
-				if(!ends_with(orig_path, '/')) strcat(orig_path, "/");
-				strcat(orig_path, dirent->d_name);
-					} else{
-			strcat(dest_path, destination);
-				if(!ends_with(dest_path, '/')) strcat(dest_path, "/");
-				strcat(dest_path, base(dirent->d_name));
-				strcat(orig_path, origin);
-				if(!ends_with(orig_path, '/')) strcat(orig_path, "/");
-				strcat(orig_path, dirent->d_name);
-					unsigned int i=0;
-					char** command=calloc(5+flagc, PATH_MAX);
-					command[0]=compiler;
-					command[1]="-o";
-					command[2]=dest_path;
-					command[3]=orig_path;
-					// command=(char**)reallocarray(command, 4+flagc+1, sizeof(char*));
-					if(command==NULL) exit(1);
-					for(i=0; i<flagc; i++) command[4+i]=flags[i];
-					for(i=0; i<4+flagc; i++) printf("command:%s\n", command[i]);
-					nom_log(NOM_DEBUG, "flagc:%d\n", 4+flagc);
-					if(command[2]==NULL || command[3]==NULL) exit(1);
-					command[4+flagc+1]=NULL;
-					exec(command);
-					}
-				}
-			/*
-			INFO("COMMAND %s", command[0]);
-	    INFO("BINARY %s", command[2]);
-	    INFO("SOURCE %s", command[3]);
-	    INFO("[source]:%s [binary]:%s", orig_path, upcwd(dest_path, NULL)); 
-			INFO("compiled:%s", dest_path);	
-			*/
-			}
-			}
-		}
-	}
-	return 0;
-}
-
-unsigned int compile_dir(char* origin, char* destination, char* compiler, Cstr extension){
-  if(origin==NULL || destination==NULL || compiler==NULL || extension==NULL){
-    fprintf(stderr, "origin, destination, compiler or extension was null\n");
-    return 0;
-  }
-	struct dirent *dirent;
-  DIR* source_dir;
-  source_dir=opendir(origin);
-  if(source_dir){
-    while((dirent=readdir(source_dir))!=NULL){
-      if(strcmp(dirent->d_name, ".")!=0 && strcmp(dirent->d_name, "..")!=0){
-	if(strcmp(ext(dirent->d_name), extension)==0){
-	  char* dest_path=calloc(1, PATH_MAX);
-	  char* origin_path=calloc(1, PATH_MAX);
-		// char* buff=calloc(1, PATH_MAX);
-		// char* dbuff=calloc(1, PATH_MAX);
-		char* cwdbuff=calloc(1, PATH_MAX);
-		if(strcmp(origin, destination)==0){
-	    char* command[]={compiler, "-o", base(dirent->d_name), dirent->d_name, NULL};
-	    exec(command);
-	    nom_log(NOM_DEBUG, "COMPILED %s", command[3]);
-	    nom_log(NOM_DEBUG, "BINARY %s", command[2]);
-	    nom_log(NOM_DEBUG, "finished compiling %s %s", command[3], command[2]);
-	  }
-	  else{
-	    if(strcmp(origin, ".")==0){
-	    strcat(origin_path, dirent->d_name);	
-	    nom_log(NOM_DEBUG, "ORIGIN:dot %s", origin_path);
-	    } 
-	    if(strcmp(origin, ".")!=0){
-			strcat(origin_path, origin);
-			if(!ends_with(origin_path, '/')){
-	    strcat(origin_path, "/");
-	    }
-	    strcat(origin_path, dirent->d_name);
-	    nom_log(NOM_DEBUG, "ORIGIN:path %s", origin_path);
-	    }
-	    if(strcmp(destination, ".")==0){
-	    strcat(dest_path, origin);
-	    if(!ends_with(dest_path, '/')){
-			strcat(dest_path, "/");
-	    }
-	    strcat(dest_path, base(dirent->d_name));
-	    nom_log(NOM_DEBUG, "DEST:path %s", dest_path);
-	    }
-	    if(strcmp(destination, ".")!=0){
-	    strcat(dest_path, destination);
-			nom_log(NOM_DEBUG, "DEST:dot %s", dest_path);
-	    if(!ends_with(dest_path, '/')){
-			strcat(dest_path, "/");
-	    }
-	    strcat(dest_path, base(dirent->d_name));
-	    nom_log(NOM_DEBUG, "DEST:path %s", dest_path);
-	    }
-	    char* command[]={compiler, "-o", dest_path, origin_path, NULL};
-	    exec(command);
-			nom_log(NOM_INFO, "COMMAND %s", command[0]);
-	    nom_log(NOM_INFO, "BINARY %s", command[2]);
-	    nom_log(NOM_INFO, "SOURCE %s", command[3]);
-	    nom_log(NOM_INFO, "[source]:%s [binary]:%s", origin_path, upcwd(dest_path, cwdbuff)); 
-		}
-			free(dest_path);
-			free(origin_path);
-			free(cwdbuff);
-	}
-      }
-    }
-  }
-	return 1;
 }
 
 unsigned int renameold(char* file){
