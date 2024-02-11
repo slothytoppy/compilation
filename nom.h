@@ -240,6 +240,7 @@ unsigned int nom_run_async1(Nom_cmd cmd){
   printf("executed: ");
   int i;
   for(i=0; i<cmd.count-1; i++){
+  // printf("%d\n", cmd.count);
   printf("%s ", cmd.items[i]);
   }
   }
@@ -558,10 +559,7 @@ if(needs_rebuild(file, bin)){
   return 1;
 }
 
-/*
-int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
-  if(!lib || !file || !compiler) return 0;
-int UPDATE_PATH_TIME(char* path1, char* path2){
+int update_path_time(char* path1, char* path2){
   if(!path1 || !path2) return 0;
   struct stat fi;
   struct utimbuf ntime;
@@ -585,15 +583,9 @@ int UPDATE_PATH_TIME(char* path1, char* path2){
     return 0;
   }
   return path1_time==path2_time;
-  }
 }
-<<<<<<< HEAD
-=======
-}
->>>>>>> main
-*/
 
-int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
+int is_library_modified(char* lib, char* file, char* compiler){
   if(!lib || !file) return 0;
   struct stat fi;
   struct utimbuf ntime;
@@ -605,6 +597,9 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
   if(stat(file, &fi)<0){
     fprintf(stderr, "%s doesnt exist\n", file);
   }
+  Nom_cmd cmd={0};
+  unsigned int file_time=fi.st_mtime;
+  if(lib_time>file_time){
   Nom_cmd cmd={0};
   nom_cmd_append(&cmd, compiler);
   nom_cmd_append(&cmd, "-ggdb");
@@ -622,8 +617,9 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
     return 1;
     }
   }
+  }
   return 0;
-} 
+}
 
 // simple rebuild implementation but should always work
 #define GO_REBUILD(argc, argv, compiler){																							\
