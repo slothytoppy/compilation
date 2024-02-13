@@ -85,10 +85,21 @@ typedef struct{
 
 #define DEFAULT_CAP 256
 
+void nom_cmd_append1(Nom_cmd* cmd, char* item){
+  if(item==NULL) return;
+  if(cmd->count==0){
+    cmd->capacity=DEFAULT_CAP;
+    cmd->items=(char**)calloc(1, sizeof(cmd->items));
+    cmd->items[0]=item;
+    cmd->count++;
+  }
+
+}
+
 void nom_cmd_append(Nom_cmd *cmd, char *item) {
   if (cmd->count == 0) {
     cmd->capacity = DEFAULT_CAP;
-    cmd->items = (char**)malloc(sizeof(cmd->items));
+    cmd->items = (char**)calloc(1, sizeof(cmd->items));
     cmd->items[0] = item;
     cmd->count++;
     return;
@@ -98,11 +109,43 @@ void nom_cmd_append(Nom_cmd *cmd, char *item) {
   cmd->items = (char**)realloc(cmd->items, cmd->count * sizeof(cmd->items));
   cmd->items[cmd->count - 1] = item;
 
-  if (cmd->count >= cmd->capacity) {
+  if (cmd->count+1 >= cmd->capacity) {
     cmd->capacity *= 2;
     cmd->items = (char**)realloc(cmd->items, cmd->capacity * sizeof(char *));
     if (cmd->items == NULL) {
       nom_log(NOM_PANIC, "could not allocate enough memory for cmd");
+      exit(1);
+    }
+  }
+}
+
+typedef struct{
+  void** items;
+  unsigned count;
+  unsigned capacity;
+  int type;
+} Dyn_arr;
+
+void dyn_init(Dyn_arr* dyn, unsigned type){
+  dyn->type=sizeof(type);
+}
+
+void dyn_arr_append(Dyn_arr* dyn, void* item){
+  if(dyn->count==0){
+  dyn->capacity=DEFAULT_CAP;
+  dyn->items=(void**)malloc(1*dyn->type*sizeof(item));
+  dyn->items[0]=item;
+  dyn->count++;
+  return;
+  }
+  dyn->count+=1;
+  dyn->items=(void**)realloc(dyn->items, dyn->count*dyn->type*sizeof(item));
+  dyn->items[dyn->count-1]=item;
+  if(dyn->count>=dyn->capacity){
+    dyn->capacity*=2;
+    dyn->items=(void**)realloc(dyn->items, dyn->capacity*dyn->type);
+    if(dyn->items==NULL){
+      nom_log(NOM_PANIC, "could not alloc enough memory for dyn");
       exit(1);
     }
   }
@@ -182,32 +225,25 @@ unsigned int nom_run_async(Nom_cmd cmd) {
   if (cmd.count <= 0) {
     return 0;
   }
-if (cmd.items[cmd.count] != NULL) {
-    nom_cmd_append(&cmd, NULL);
-  }
-  if (cmd.items[cmd.count] != NULL) {
-    nom_log(NOM_PANIC, "could not null terminate cmd");
-    exit(1);
+  cmd.items[cmd.count-1]=NULL;
+  if (cmd.items[cmd.count-1] != NULL) {
+  nom_log(NOM_PANIC, "cmd.items at %d is not null terminated", cmd.count);
+  exit(1);
   }
   pid_t pid = fork();
-  if (pid < 0) {
+  if(pid==-1){
     nom_log(NOM_PANIC, "fork failed in nom_run_async");
     return 0;
   }
-
-  switch (pid) {
-  case -1:
-    nom_log(NOM_PANIC, "fork failed in nom_run_async");
-    return 0;
-  case 0:
-    for (int i = 0; i < cmd.count; i++) {
+  if(pid==0){
+    for (int i = 0; i<cmd.count-1; i++) {
+    unsigned before_null=2;
       printf("%s ", cmd.items[i]);
-      if (i == cmd.count - 1) {
+      if (i == cmd.count-before_null) {
         printf("\n");
       }
     }
   }
-
   if (execvp(cmd.items[0], cmd.items) == -1) {
     nom_log(NOM_PANIC, "could not execute child process");
     exit(1);
@@ -241,6 +277,7 @@ unsigned int nom_run_async1(Nom_cmd cmd){
   int i;
   for(i=0; i<cmd.count-1; i++){
   printf("%s ", cmd.items[i]);
+  if(i==cmd.count-1) printf("\n");
   }
   }
   return pid;
@@ -535,7 +572,6 @@ char* bin=base(file);
 char* old_path=strcat(base(file), ".old");
 Nom_cmd cmd={0};
 nom_cmd_append_many(&cmd, 6, compiler, "-ggdb", file, "-o", base(file));
-//char* command[]={compiler, "-ggdb", file, "-o", base(file), NULL};
 if(needs_rebuild(file, bin)){
   rename(bin, old_path);
   nom_log(NOM_INFO, "renamed %s to %s", bin, old_path);
@@ -587,10 +623,6 @@ int UPDATE_PATH_TIME(char* path1, char* path2){
   return path1_time==path2_time;
   }
 }
-<<<<<<< HEAD
-=======
-}
->>>>>>> main
 */
 
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler){
