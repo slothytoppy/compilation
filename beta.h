@@ -1,3 +1,4 @@
+/*
 #ifndef NOM_IMPLEMENTATION
 unsigned int exec(char* args[]); // is a wrapper for execvp
 unsigned int run(char* pathname);
@@ -13,6 +14,7 @@ unsigned int is_path1_modified_after_path2(const char* source_path, const char* 
 #endif
 
 #ifdef NOM_IMPLEMENTATION
+*/
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -97,6 +99,8 @@ void nom_cmd_append(Nom_cmd* cmd, char* item) {
       exit(1);
     }
   }
+}
+void nom_cmd_shrink(Nom_cmd* cmd, int ind[]) {
 }
 
 void dyn_init(Dyn_arr* dyn, unsigned type) {
@@ -211,7 +215,7 @@ unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
       nom_log(NOM_INFO, "%s was ran successfully", cmd.items[0]);
       return 1;
     } else {
-      nom_log(NOM_INFO, "%s failed to run", cmd.items[0]);
+      nom_log(NOM_INFO, "%s failed to execute", cmd.items[0]);
       perror("nom");
       return 0;
     }
@@ -242,12 +246,13 @@ unsigned int nom_run_async(Nom_cmd cmd) {
         printf("\n");
       }
     }
+    return pid;
   }
   if(execvp(cmd.items[0], cmd.items) == -1) {
     nom_log(NOM_PANIC, "could not execute child process");
     exit(1);
   }
-  return pid;
+  return 0;
 }
 
 unsigned int nom_run_async1(Nom_cmd cmd) {
@@ -289,12 +294,12 @@ unsigned int nom_run_sync(Nom_cmd cmd) {
   int child_status;
   pid_t id = nom_run_async(cmd);
   if(waitpid(id, &child_status, 0)) {
-    if(WIFEXITED(child_status)) {
-      if(WEXITSTATUS(child_status) == 0) {
-        return 1;
-      } else {
-        return WEXITSTATUS(child_status);
-      }
+    if(!WIFEXITED(child_status))
+      return 0;
+    if(WEXITSTATUS(child_status) == 0) {
+      return 1;
+    } else {
+      return 0;
     }
   }
   return 0;
@@ -330,6 +335,38 @@ char* base(const char* file) {
   if(lastExt != NULL)
     *lastExt = '\0';
   return retStr;
+}
+
+int ends_substr(char* str1, char* str2) {
+  if(!str1 | !str2)
+    return 0;
+  int ned = strlen(str2);
+  int j = 0;
+  if(ned > strlen(str1))
+    return 0;
+  for(int i = strlen(str1) - ned; i < ned; i++) {
+    if(str1[i] == str2[j]) {
+      j++;
+      continue;
+    }
+    return 0;
+  }
+  return 1;
+}
+
+int has_substr(const char* const str1, const char* const str2) {
+  if(!str1 | !str2)
+    return 0;
+  int needle = strlen(str2);
+  int j = 0;
+  for(int i = strlen(str1) - needle; i < needle; i++) {
+    if(str1[i] == str2[j]) {
+      j++;
+      continue;
+    }
+    return 0;
+  }
+  return 1;
 }
 
 unsigned int IS_PATH_DIR(char* path) {
@@ -388,6 +425,40 @@ unsigned int IS_FILE_MODIFIED(char* path) {
   time_t now = time(NULL);
   struct tm* curtime = localtime(&now);
   return source_time >= now;
+}
+
+unsigned int mkfile_if_not_exist(char* file) {
+  if(!file)
+    return 0;
+  struct stat fi;
+  if(stat(file, &fi) < 0) {
+    if(errno == EEXIST) {
+      nom_log(NOM_DEBUG, "dir: %s already exists");
+      return 1;
+    }
+    if(creat(file, 0644) < 0) {
+      fprintf(stderr, "mkfile error:%s %d\n", file, errno);
+      return 0;
+    }
+  }
+  return 1;
+}
+
+unsigned int mkdir_if_not_exist(char* path) {
+  if(!path)
+    return 0;
+  struct stat fi;
+  if(stat(path, &fi) != 0) {
+    mode_t perms = S_IRWXU | S_IRWXG | S_IRWXO;
+    if(mkdir(path, perms) < 0) {
+      fprintf(stderr, "mkdir error:%s %d\n", path, errno);
+      return 0;
+    }
+  }
+  if(IS_PATH_EXIST(path)) {
+    return 1;
+  }
+  return 0;
 }
 
 time_t set_mtime(char* file) {
@@ -464,7 +535,11 @@ unsigned int rebuild(char* file, char* compiler) {
   }
   nom_log(NOM_INFO, "renamed %s to %s", bin, old_path);
   if(!nom_run_sync(cmd)) {
-    nom_log(NOM_WARN, "%s failed to run", cmd.items[0]);
+    nom_log(NOM_WARN, "%s failed to urmom", cmd.items[0]);
+    for(int i = 0; i < cmd.count; i++) {
+      printf("%s ", cmd.items[i]);
+    }
+    printf("%d\n", cmd.count);
     return 0;
   }
   if(!IS_PATH_EXIST(bin)) {
@@ -560,4 +635,5 @@ unsigned int nom_read_inot(unsigned fd, char* bin_path, char* args[]) {
   }
   return 0;
 }
-#endif
+
+// #endif

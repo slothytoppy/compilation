@@ -422,18 +422,35 @@ unsigned int IS_PATH_MODIFIED(char* path, char* path2) {
   return source_time > binary_time;
 }
 
-unsigned int MKFILE(char* file) {
+unsigned int mkfile_if_not_exist(char* file) {
   if(!file)
     return 0;
   struct stat fi;
-  if(stat(file, &fi) != 0) {
+  if(stat(file, &fi) < 0) {
+    if(errno == EEXIST) {
+      nom_log(NOM_DEBUG, "dir: %s already exists");
+      return 1;
+    }
     if(creat(file, 0644) < 0) {
       fprintf(stderr, "mkfile error:%s %d\n", file, errno);
       return 0;
     }
   }
-  if(IS_PATH_EXIST(file)) {
-    nom_log(NOM_DEBUG, "CREATED %s", file);
+  return 1;
+}
+
+unsigned int mkdir_if_not_exist(char* path) {
+  if(!path)
+    return 0;
+  struct stat fi;
+  if(stat(path, &fi) != 0) {
+    mode_t perms = S_IRWXU | S_IRWXG | S_IRWXO;
+    if(mkdir(path, perms) < 0) {
+      fprintf(stderr, "mkdir error:%s %d\n", path, errno);
+      return 0;
+    }
+  }
+  if(IS_PATH_EXIST(path)) {
     return 1;
   }
   return 0;
@@ -449,7 +466,12 @@ unsigned int RMFILE(char* file) {
       return 0;
     }
   }
+  if(errno == ENOENT) {
+    nom_log(NOM_DEBUG, "file does not exit");
+    return 1;
+  }
   if(!IS_PATH_EXIST(file)) {
+    nom_log(NOM_DEBUG, "%s was removed", file);
     return 1;
   }
   return 0;
@@ -483,20 +505,6 @@ unsigned int CLEAN(char* directory, char* extension) {
 }
 
 unsigned int MKDIR(char* path) {
-  if(!path)
-    return 0;
-  struct stat fi;
-  if(stat(path, &fi) != 0) {
-    mode_t perms = S_IRWXU | S_IRWXG | S_IRWXO;
-    if(mkdir(path, perms) < 0) {
-      fprintf(stderr, "mkdir error:%s %d\n", path, errno);
-      return 0;
-    }
-  }
-  if(IS_PATH_EXIST(path)) {
-    return 1;
-  }
-  return 0;
 }
 
 unsigned int RMDIR(char* path) {
