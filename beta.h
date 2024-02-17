@@ -96,11 +96,23 @@ void nom_cmd_append(Nom_cmd* cmd, char* item) {
     cmd->items = (char**)realloc(cmd->items, cmd->capacity * sizeof(char*));
     if(cmd->items == NULL) {
       nom_log(NOM_PANIC, "could not allocate enough memory for cmd");
-      exit(1);
+      return;
     }
   }
 }
-void nom_cmd_shrink(Nom_cmd* cmd, int ind[]) {
+Nom_cmd nom_cmd_shrink(Nom_cmd* cmd, ...) {
+  Nom_cmd shrunk;
+  va_list args;
+  va_start(args, cmd);
+  for(int i = 0; i < cmd->count; i++) {
+    char* item = va_arg(args, char*);
+    if(item != NULL) {
+      if(item == cmd->items[i])
+        cmd->items[i] = NULL;
+      cmd->count -= 1;
+    }
+  }
+  return shrunk;
 }
 
 void dyn_init(Dyn_arr* dyn, unsigned type) {
@@ -123,7 +135,7 @@ void dyn_arr_append(Dyn_arr* dyn, void* item) {
     dyn->items = (void**)realloc(dyn->items, dyn->capacity * dyn->type);
     if(dyn->items == NULL) {
       nom_log(NOM_PANIC, "could not alloc enough memory for dyn");
-      exit(1);
+      return;
     }
   }
 }
@@ -206,7 +218,7 @@ unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
   if(pid > 0) {
     int child_status;
     if(waitpid(pid, &child_status, 0) < 0)
-      exit(0);
+      return 0;
     if(!WIFEXITED(child_status)) {
       nom_log(NOM_WARN, "could not exit %s properly", cmd.items[0]);
       return 0;
@@ -230,7 +242,7 @@ unsigned int nom_run_async(Nom_cmd cmd) {
   cmd.items[cmd.count - 1] = NULL;
   if(cmd.items[cmd.count - 1] != NULL) {
     nom_log(NOM_PANIC, "cmd.items at %d is not null terminated", cmd.count);
-    exit(1);
+    return 1;
   }
   pid_t pid = fork();
   if(pid == -1) {
@@ -250,58 +262,57 @@ unsigned int nom_run_async(Nom_cmd cmd) {
   }
   if(execvp(cmd.items[0], cmd.items) == -1) {
     nom_log(NOM_PANIC, "could not execute child process");
-    exit(1);
+    return 1;
   }
-  return 0;
-}
-
-unsigned int nom_run_async1(Nom_cmd cmd) {
-  if(cmd.count <= 0)
-    return 0;
-  if(cmd.items[cmd.count] != NULL) {
-    nom_cmd_append(&cmd, NULL);
-  }
-  if(cmd.items[cmd.count] != NULL) {
-    nom_log(NOM_PANIC, "could not null terminate cmd");
-    exit(1);
-  }
-  pid_t pid = fork();
-  if(pid < 0) {
-    nom_log(NOM_PANIC, "fork failed in nom_run_async");
-    return 0;
-  }
-  if(pid == 0) {
-    if(execvp(cmd.items[0], cmd.items) < 0) {
-      nom_log(NOM_PANIC, "could not execute child process");
-      exit(1);
-    }
-  }
-  if(pid > 0) {
-    printf("executed: ");
-    int i;
-    for(i = 0; i < cmd.count - 1; i++) {
-      printf("%s ", cmd.items[i]);
-      if(i == cmd.count - 1)
-        printf("\n");
-    }
-  }
+  nom_log(NOM_PANIC, "from async");
   return pid;
 }
 
 unsigned int nom_run_sync(Nom_cmd cmd) {
-  if(cmd.count <= 0)
+  if(cmd.count <= 0) {
     return 0;
+  }
+  cmd.items[cmd.count - 1] = NULL;
+  if(cmd.items[cmd.count - 1] != NULL) {
+    nom_log(NOM_PANIC, "cmd.items at %d is not null terminated", cmd.count);
+    return 0;
+  }
+  pid_t id = fork();
   int child_status;
-  pid_t id = nom_run_async(cmd);
-  if(waitpid(id, &child_status, 0)) {
-    if(!WIFEXITED(child_status))
+  if(id == -1) {
+    nom_log(NOM_PANIC, "fork failed in nom_run_async");
+    return 0;
+  }
+  if(id == 0) {
+    if(execvp(cmd.items[0], cmd.items) == -1) {
+      nom_log(NOM_PANIC, "could not execute child process");
+      return 1;
+    }
+  }
+  if(id > 0) {
+    if(waitpid(id, &child_status, 0) < 0) {
       return 0;
+    }
+    if(!WIFEXITED(child_status)) {
+      return 0;
+    }
     if(WEXITSTATUS(child_status) == 0) {
       return 1;
     } else {
+      printf("d\n");
       return 0;
     }
+    printf("compiled: ");
+    for(int i = 0; i < cmd.count - 1; i++) {
+      unsigned before_null = 2;
+      printf("%s ", cmd.items[i]);
+      if(i == cmd.count - before_null) {
+        printf("\n");
+      }
+    }
+    return id;
   }
+  nom_log(NOM_PANIC, "from sync");
   return 0;
 }
 
@@ -536,23 +547,19 @@ unsigned int rebuild(char* file, char* compiler) {
   nom_log(NOM_INFO, "renamed %s to %s", bin, old_path);
   if(!nom_run_sync(cmd)) {
     nom_log(NOM_WARN, "%s failed to urmom", cmd.items[0]);
-    for(int i = 0; i < cmd.count; i++) {
-      printf("%s ", cmd.items[i]);
-    }
-    printf("%d\n", cmd.count);
     return 0;
   }
   if(!IS_PATH_EXIST(bin)) {
     nom_log(NOM_INFO, "renaming %s to %s", old_path, bin);
     rename(old_path, bin);
   }
-  nom_log(NOM_INFO, "compiled %s %s %s %s", cmd.items[2], cmd.items[3], cmd.items[4], cmd.items[5]);
+  nom_log(NOM_INFO, "compiled: %s %s %s", cmd.items[2], cmd.items[3], cmd.items[4]);
   Nom_cmd run = {0};
   nom_cmd_append(&run, base(file));
   if(!nom_run_path(run, NULL)) {
     return 0;
   }
-  printf("hello from the end of rebuild\n");
+  nom_log(NOM_INFO, "hello from the end of rebuild");
   exit(0);
 }
 

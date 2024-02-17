@@ -6,16 +6,15 @@ int main(int argc, char* argv[]) {
   rebuild(__FILE__, "gcc");
   Nom_cmd run = {0};
   nom_cmd_append(&run, "nom");
-  /*if(!nom_run_path(run, NULL)) {
+  if(!nom_run_path(run, NULL)) {
     exit(1);
   }
-  */
   int end = ends_substr("helloaskjldalksjfjasdfkljakjfdashjkfdsahk", "elloaskjldalksjfjasdfkljakjfdashjkfdsahk");
   if(end) {
-    printf("has");
+    printf("has\n");
     return 0;
   }
-  printf("not");
+  printf("not\n");
   //  if (IS_FILE_MODIFIED("nom.c"))
   // printf("hello\n");
   // printf("%d\n", x);
