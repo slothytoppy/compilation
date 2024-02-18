@@ -34,6 +34,7 @@ enum log_level {
   NOM_WARN,
   NOM_PANIC,
   NOM_DEBUG,
+  NOM_NO_NEWLINE_DEBUG,
 };
 
 typedef struct
@@ -54,9 +55,6 @@ typedef struct
 #define DEFAULT_CAP 256
 
 void nom_log(enum log_level level, const char* fmt, ...) {
-#ifdef DEBUG
-  return;
-#endif
   switch(level) {
   case NOM_DEBUG:
     fprintf(stderr, "[DEBUG] ");
@@ -70,12 +68,17 @@ void nom_log(enum log_level level, const char* fmt, ...) {
   case NOM_PANIC:
     fprintf(stderr, "[PANIC] ");
     break;
+  case NOM_NO_NEWLINE_DEBUG:
+    fprintf(stderr, "[DEBUG] ");
+    break;
   }
   va_list args;
   va_start(args, fmt);
   vfprintf(stderr, fmt, args);
   va_end(args);
-  fprintf(stderr, "\n");
+  if(level != NOM_NO_NEWLINE_DEBUG) {
+    fprintf(stderr, "\n");
+  }
 }
 
 void nom_cmd_append(Nom_cmd* cmd, char* item) {
@@ -108,27 +111,31 @@ void nom_cmd_shrink(Nom_cmd* cmd, size_t count, int arr[]) {
   for(int i = 0; i < count; i++) {
     if(arr[i] < cmd->count) {
       cmd->items[arr[i]] = NULL;
-      printf("arr[%d]=%d ", i, arr[i]);
+#ifdef DEBUG
+      nom_log(NOM_DEBUG, "arr[%d]=%d", i, arr[i]);
+#endif
     }
   }
-  printf("\n");
   for(int i = 0; i <= cmd->count; i++) {
     if(cmd->items[i] == NULL) {
       continue;
     }
     nom_cmd_append(&shrunk, cmd->items[i]);
+#ifdef DEBUG
     nom_log(NOM_DEBUG, "%s", cmd->items[i]);
+#endif
   }
   return;
 }
 
 void dyn_init(Dyn_arr* dyn, unsigned type) {
   dyn->type = sizeof(type);
+  dyn->count = 0;
+  dyn->capacity = DEFAULT_CAP;
 }
 
 void dyn_arr_append(Dyn_arr* dyn, void* item) {
   if(dyn->count == 0) {
-    dyn->capacity = DEFAULT_CAP;
     dyn->items = (void**)malloc(1 * dyn->type * sizeof(item));
     dyn->items[0] = item;
     dyn->count++;
@@ -183,7 +190,7 @@ unsigned int exec(char* args[]) {
     }
   }
   if(id < 0) {
-    printf("forking failed\n");
+    nom_log(NOM_WARN, "forking failed");
     return 0;
   }
   if(waitpid(id, &child_status, 0) < 0)
@@ -202,8 +209,6 @@ unsigned int run_path(char* path, char* args[]) {
     int child_status;
     if(waitpid(pid, &child_status, 0) < 0)
       return 0;
-    if(!WIFEXITED(child_status))
-      return 0;
     if(!WEXITSTATUS(child_status)) {
       nom_log(NOM_INFO, "%s failed to run", path);
       return 0;
@@ -211,6 +216,10 @@ unsigned int run_path(char* path, char* args[]) {
     if(WEXITSTATUS(child_status) == 0)
       nom_log(NOM_INFO, "%s was ran successfully", path);
     return 1;
+    if(WIFSIGNALED(child_status)) {
+      nom_log(NOM_PANIC, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
+      return 0;
+    }
   }
   return 0;
 }
@@ -226,17 +235,15 @@ unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
     int child_status;
     if(waitpid(pid, &child_status, 0) < 0)
       return 0;
-    if(!WIFEXITED(child_status)) {
-      nom_log(NOM_WARN, "could not exit %s properly", cmd.items[0]);
-      return 0;
-    }
     if(WEXITSTATUS(child_status) == 0) {
       nom_log(NOM_INFO, "%s was ran successfully", cmd.items[0]);
       return 1;
     } else {
       nom_log(NOM_INFO, "%s failed to execute", cmd.items[0]);
-      perror("nom");
       return 0;
+    }
+    if(WIFSIGNALED(child_status)) {
+      nom_log(NOM_PANIC, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
     }
   }
   return 1;
@@ -257,14 +264,12 @@ unsigned int nom_run_async(Nom_cmd cmd) {
     return 0;
   }
   if(pid == 0) {
-    printf("compiled: ");
+    nom_log(NOM_NO_NEWLINE_DEBUG, "async ran: ");
     for(int i = 0; i < cmd.count - 1; i++) {
       unsigned before_null = 2;
       printf("%s ", cmd.items[i]);
-      if(i == cmd.count - before_null) {
-        printf("\n");
-      }
     }
+    printf("\n");
     return pid;
   }
   if(execvp(cmd.items[0], cmd.items) == -1) {
@@ -300,24 +305,23 @@ unsigned int nom_run_sync(Nom_cmd cmd) {
     if(waitpid(id, &child_status, 0) < 0) {
       return 0;
     }
-    if(!WIFEXITED(child_status)) {
+    if(WEXITSTATUS(child_status) != 0) {
       return 0;
     }
     if(WEXITSTATUS(child_status) == 0) {
-      return 1;
-    } else {
-      printf("d\n");
-      return 0;
-    }
-    printf("compiled: ");
-    for(int i = 0; i < cmd.count - 1; i++) {
-      unsigned before_null = 2;
-      printf("%s ", cmd.items[i]);
-      if(i == cmd.count - before_null) {
-        printf("\n");
+      nom_log(NOM_NO_NEWLINE_DEBUG, "sync ran: ");
+      for(int i = 0; i <= cmd.count; i++) {
+        if(cmd.items[i] == NULL)
+          continue;
+        printf("%s ", cmd.items[i]);
       }
+      if(WIFSIGNALED(child_status)) {
+        nom_log(NOM_PANIC, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
+        return 0;
+      }
+      printf("\n");
+      return 1;
     }
-    return id;
   }
   nom_log(NOM_PANIC, "from sync");
   return 0;
@@ -535,6 +539,7 @@ Nom_cmd needs_rebuild1(char* input_path, char** output_paths, unsigned int count
       nom_cmd_append(&cmd, output_paths[i]);
     }
   }
+  fflush(stdout);
   return cmd;
 }
 
@@ -553,21 +558,18 @@ unsigned int rebuild(char* file, char* compiler) {
   }
   nom_log(NOM_INFO, "renamed %s to %s", bin, old_path);
   if(!nom_run_sync(cmd)) {
-    nom_log(NOM_WARN, "%s failed to urmom", cmd.items[0]);
     return 0;
   }
   if(!IS_PATH_EXIST(bin)) {
     nom_log(NOM_INFO, "renaming %s to %s", old_path, bin);
     rename(old_path, bin);
   }
-  nom_log(NOM_INFO, "compiled: %s %s %s", cmd.items[2], cmd.items[3], cmd.items[4]);
   Nom_cmd run = {0};
   nom_cmd_append(&run, base(file));
-  if(!nom_run_path(run, NULL)) {
-    return 0;
+  if(nom_run_path(run, NULL)) {
+    exit(0);
   }
-  nom_log(NOM_INFO, "hello from the end of rebuild");
-  exit(0);
+  exit(1);
 }
 
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
@@ -637,13 +639,13 @@ unsigned int nom_read_inot(unsigned fd, char* bin_path, char* args[]) {
     event = (struct inotify_event*)in_buff;
     if(event->mask & IN_MODIFY) {
       run_path(bin_path, args);
-      printf("%s", event->name);
+      nom_log(NOM_INFO, "%s", event->name);
     } else if(event->mask & IN_CREATE) {
       run_path(bin_path, args);
-      printf("%s", event->name);
+      nom_log(NOM_INFO, "%s", event->name);
     } else if(event->mask & IN_MOVE) {
       run_path(bin_path, args);
-      printf("%s", event->name);
+      nom_log(NOM_INFO, "%s", event->name);
     }
     usleep(350);
   }
