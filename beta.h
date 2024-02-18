@@ -100,19 +100,26 @@ void nom_cmd_append(Nom_cmd* cmd, char* item) {
     }
   }
 }
-Nom_cmd nom_cmd_shrink(Nom_cmd* cmd, ...) {
-  Nom_cmd shrunk;
-  va_list args;
-  va_start(args, cmd);
-  for(int i = 0; i < cmd->count; i++) {
-    char* item = va_arg(args, char*);
-    if(item != NULL) {
-      if(item == cmd->items[i])
-        cmd->items[i] = NULL;
-      cmd->count -= 1;
+
+void nom_cmd_shrink(Nom_cmd* cmd, size_t count, int arr[]) {
+  if(count > cmd->count)
+    return;
+  Nom_cmd shrunk = {0};
+  for(int i = 0; i < count; i++) {
+    if(arr[i] < cmd->count) {
+      cmd->items[arr[i]] = NULL;
+      printf("arr[%d]=%d ", i, arr[i]);
     }
   }
-  return shrunk;
+  printf("\n");
+  for(int i = 0; i <= cmd->count; i++) {
+    if(cmd->items[i] == NULL) {
+      continue;
+    }
+    nom_cmd_append(&shrunk, cmd->items[i]);
+    nom_log(NOM_DEBUG, "%s", cmd->items[i]);
+  }
+  return;
 }
 
 void dyn_init(Dyn_arr* dyn, unsigned type) {
