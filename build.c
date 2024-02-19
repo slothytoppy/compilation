@@ -4,6 +4,7 @@
 
 int main(int argc, char* argv[]) {
   rebuild(__FILE__, "gcc");
+  IS_LIBRARY_MODIFIED("beta.h", "build.c", "gcc");
   Nom_cmd run = {0};
   nom_cmd_append(&run, "nom");
   if(!nom_run_path(run, NULL)) {

@@ -91,14 +91,15 @@ void nom_cmd_append(Nom_cmd* cmd, char* item) {
   }
 
   cmd->count += 1;
-  cmd->items = (char**)realloc(cmd->items, cmd->count * sizeof(cmd->items));
+  cmd->items = (char**)realloc(cmd->items, (cmd->count + 1) * sizeof(cmd->items));
   cmd->items[cmd->count - 1] = item;
+  cmd->items[cmd->count] = NULL;
 
   if(cmd->count + 1 >= cmd->capacity) {
     cmd->capacity *= 2;
     cmd->items = (char**)realloc(cmd->items, cmd->capacity * sizeof(char*));
     if(cmd->items == NULL) {
-      nom_log(NOM_PANIC, "could not allocate enough memory for cmd");
+      nom_log(NOM_PANIC, "could not allocate enough memory for cmd; buy more ram smh");
       return;
     }
   }
@@ -111,9 +112,7 @@ void nom_cmd_shrink(Nom_cmd* cmd, size_t count, int arr[]) {
   for(int i = 0; i < count; i++) {
     if(arr[i] < cmd->count) {
       cmd->items[arr[i]] = NULL;
-#ifdef DEBUG
       nom_log(NOM_DEBUG, "arr[%d]=%d", i, arr[i]);
-#endif
     }
   }
   for(int i = 0; i <= cmd->count; i++) {
@@ -121,53 +120,31 @@ void nom_cmd_shrink(Nom_cmd* cmd, size_t count, int arr[]) {
       continue;
     }
     nom_cmd_append(&shrunk, cmd->items[i]);
-#ifdef DEBUG
     nom_log(NOM_DEBUG, "%s", cmd->items[i]);
-#endif
   }
   return;
-}
-
-void dyn_init(Dyn_arr* dyn, unsigned type) {
-  dyn->type = sizeof(type);
-  dyn->count = 0;
-  dyn->capacity = DEFAULT_CAP;
-}
-
-void dyn_arr_append(Dyn_arr* dyn, void* item) {
-  if(dyn->count == 0) {
-    dyn->items = (void**)malloc(1 * dyn->type * sizeof(item));
-    dyn->items[0] = item;
-    dyn->count++;
-    return;
-  }
-  dyn->count += 1;
-  dyn->items = (void**)realloc(dyn->items, dyn->count * dyn->type * sizeof(item));
-  dyn->items[dyn->count - 1] = item;
-  if(dyn->count >= dyn->capacity) {
-    dyn->capacity *= 2;
-    dyn->items = (void**)realloc(dyn->items, dyn->capacity * dyn->type);
-    if(dyn->items == NULL) {
-      nom_log(NOM_PANIC, "could not alloc enough memory for dyn");
-      return;
-    }
-  }
-}
-
-void nom_cmd_append_null(Nom_cmd* cmd) {
-  nom_cmd_append(cmd, NULL);
 }
 
 void nom_cmd_append_many(Nom_cmd* cmd, unsigned count, ...) {
   va_list args;
   va_start(args, count);
   int i = 0;
-  while(i <= count) {
+  while(i < count) {
     char* item = va_arg(args, char*);
     nom_cmd_append(cmd, item);
     i++;
   }
   va_end(args);
+}
+
+void nom_print_cmd(Nom_cmd* cmd) {
+  if(cmd->count == 0)
+    return;
+  for(int i = 0; i < cmd->count; i++) {
+    printf("%s ", cmd->items[i]);
+  }
+  printf("\n");
+  return;
 }
 
 void* nom_shift_args(int* argc, char*** argv) {
@@ -217,7 +194,7 @@ unsigned int run_path(char* path, char* args[]) {
       nom_log(NOM_INFO, "%s was ran successfully", path);
     return 1;
     if(WIFSIGNALED(child_status)) {
-      nom_log(NOM_PANIC, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
+      nom_log(NOM_INFO, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
       return 0;
     }
   }
@@ -243,7 +220,7 @@ unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
       return 0;
     }
     if(WIFSIGNALED(child_status)) {
-      nom_log(NOM_PANIC, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
+      nom_log(NOM_INFO, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
     }
   }
   return 1;
@@ -253,11 +230,7 @@ unsigned int nom_run_async(Nom_cmd cmd) {
   if(cmd.count <= 0) {
     return 0;
   }
-  cmd.items[cmd.count - 1] = NULL;
-  if(cmd.items[cmd.count - 1] != NULL) {
-    nom_log(NOM_PANIC, "cmd.items at %d is not null terminated", cmd.count);
-    return 1;
-  }
+  nom_log(NOM_INFO, "starting to run %s", cmd.items[0]);
   pid_t pid = fork();
   if(pid == -1) {
     nom_log(NOM_PANIC, "fork failed in nom_run_async");
@@ -265,18 +238,17 @@ unsigned int nom_run_async(Nom_cmd cmd) {
   }
   if(pid == 0) {
     nom_log(NOM_NO_NEWLINE_DEBUG, "async ran: ");
-    for(int i = 0; i < cmd.count - 1; i++) {
-      unsigned before_null = 2;
+    nom_print_cmd(&cmd);
+    /*for(int i = 0; i < cmd.count; i++) {
       printf("%s ", cmd.items[i]);
     }
-    printf("\n");
+    */
     return pid;
   }
   if(execvp(cmd.items[0], cmd.items) == -1) {
-    nom_log(NOM_PANIC, "could not execute child process");
+    nom_log(NOM_WARN, "could not execute child process");
     return 1;
   }
-  nom_log(NOM_PANIC, "from async");
   return pid;
 }
 
@@ -284,11 +256,7 @@ unsigned int nom_run_sync(Nom_cmd cmd) {
   if(cmd.count <= 0) {
     return 0;
   }
-  cmd.items[cmd.count - 1] = NULL;
-  if(cmd.items[cmd.count - 1] != NULL) {
-    nom_log(NOM_PANIC, "cmd.items at %d is not null terminated", cmd.count);
-    return 0;
-  }
+  nom_log(NOM_INFO, "starting to run %s", cmd.items[0]);
   pid_t id = fork();
   int child_status;
   if(id == -1) {
@@ -306,24 +274,24 @@ unsigned int nom_run_sync(Nom_cmd cmd) {
       return 0;
     }
     if(WEXITSTATUS(child_status) != 0) {
+      nom_log(NOM_INFO, "failed to run %s", cmd.items[0]);
       return 0;
     }
     if(WEXITSTATUS(child_status) == 0) {
       nom_log(NOM_NO_NEWLINE_DEBUG, "sync ran: ");
-      for(int i = 0; i <= cmd.count; i++) {
-        if(cmd.items[i] == NULL)
+      nom_print_cmd(&cmd);
+      /*for(int i = 0; i <= cmd.count; i++) {
+          if(cmd.items[i] == NULL)
           continue;
         printf("%s ", cmd.items[i]);
-      }
+      }*/
       if(WIFSIGNALED(child_status)) {
-        nom_log(NOM_PANIC, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
+        nom_log(NOM_WARN, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
         return 0;
       }
-      printf("\n");
       return 1;
     }
   }
-  nom_log(NOM_PANIC, "from sync");
   return 0;
 }
 
@@ -492,7 +460,7 @@ time_t set_mtime(char* file) {
     return 0;
   }
   if(stat(file, &fi) < 0) {
-    nom_log(NOM_PANIC, "could not stat %s", file);
+    nom_log(NOM_WARN, "could not stat %s", file);
     return 0;
   }
   if(fi.st_mtime > 0)
@@ -551,7 +519,7 @@ unsigned int rebuild(char* file, char* compiler) {
     return 0;
   char* old_path = strcat(base(file), ".old");
   Nom_cmd cmd = {0};
-  nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", base(file));
+  nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", "build");
   rename(bin, old_path);
   if(!IS_PATH_EXIST(old_path)) {
     nom_log(NOM_WARN, "%s does not exist, no previous rollback, exiting", old_path);
@@ -585,14 +553,16 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
   if(stat(file, &fi) < 0) {
     fprintf(stderr, "%s doesnt exist\n", file);
   }
+  unsigned int file_time = fi.st_mtime;
   Nom_cmd cmd = {0};
   nom_cmd_append(&cmd, compiler);
   nom_cmd_append(&cmd, "-ggdb");
   nom_cmd_append(&cmd, file);
   nom_cmd_append(&cmd, "-o");
   nom_cmd_append(&cmd, base(file));
-  unsigned int file_time = fi.st_mtime;
+  // nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", base(file));
   if(lib_time > file_time) {
+    // nom_log(NOM_DEBUG, "%s %s %s %s", lib, file, compiler, base(file));
     if(nom_run_sync(cmd)) {
       if(utime(file, &ntime) < 0) {
         fprintf(stderr, "could not update %s's timestamp\n", file);
@@ -650,6 +620,32 @@ unsigned int nom_read_inot(unsigned fd, char* bin_path, char* args[]) {
     usleep(350);
   }
   return 0;
+}
+
+void dyn_init(Dyn_arr* dyn, unsigned type) {
+  dyn->type = sizeof(type);
+  dyn->count = 0;
+  dyn->capacity = DEFAULT_CAP;
+}
+
+void dyn_arr_append(Dyn_arr* dyn, void* item) {
+  if(dyn->count == 0) {
+    dyn->items = (void**)malloc(1 * dyn->type * sizeof(item));
+    dyn->items[0] = item;
+    dyn->count++;
+    return;
+  }
+  dyn->count += 1;
+  dyn->items = (void**)realloc(dyn->items, dyn->count * dyn->type * sizeof(item));
+  dyn->items[dyn->count - 1] = item;
+  if(dyn->count >= dyn->capacity) {
+    dyn->capacity *= 2;
+    dyn->items = (void**)realloc(dyn->items, dyn->capacity * dyn->type);
+    if(dyn->items == NULL) {
+      nom_log(NOM_PANIC, "could not alloc enough memory for dyn; buy more ram smh");
+      return;
+    }
+  }
 }
 
 // #endif
