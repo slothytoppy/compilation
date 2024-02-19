@@ -1,10 +1,14 @@
-#define DEBUG
 #define NOM_IMPLEMENTATION
 #include "beta.h"
 
 int main(int argc, char* argv[]) {
   rebuild(__FILE__, "gcc");
   IS_LIBRARY_MODIFIED("beta.h", "build.c", "gcc");
+  //  iter_colors();
+  nom_log(NOM_WARN, "hello");
+  nom_log(NOM_DEBUG, "hello");
+  nom_log(NOM_INFO, "hello");
+  nom_log(NOM_PANIC, "hello");
   Nom_cmd run = {0};
   nom_cmd_append(&run, "nom");
   if(!nom_run_path(run, NULL)) {
