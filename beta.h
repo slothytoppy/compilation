@@ -55,34 +55,50 @@ typedef struct
 #define DEFAULT_CAP 256
 
 void nom_log(enum log_level level, const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+
   char* debug = "\033[38;5;241m[DEBUG]\033[0m";
   char* info = "\033[38;5;208m[INFO]\033[0m";
   char* warn = "\033[38;5;1m[WARN]\033[0m";
   char* panic = "\033[38;5;196m[PANIC]\033[0m";
+
   switch(level) {
   case NOM_DEBUG:
+#ifdef DEBUG
     fprintf(stderr, "%s ", debug);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+#endif
     break;
   case NOM_INFO:
     fprintf(stderr, "%s ", info);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
     break;
   case NOM_WARN:
     fprintf(stderr, "%s ", warn);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
     break;
   case NOM_PANIC:
     fprintf(stderr, "%s ", panic);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
     break;
   case NOM_NO_NEWLINE_DEBUG:
+#ifdef DEBUG
     fprintf(stderr, "%s ", debug);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+#endif
     break;
   }
-  va_list args;
-  va_start(args, fmt);
-  vfprintf(stderr, fmt, args);
-  va_end(args);
-  if(level != NOM_NO_NEWLINE_DEBUG) {
-    fprintf(stderr, "\n");
-  }
+  return;
 }
 
 void iter_colors(void) {
@@ -308,11 +324,6 @@ unsigned int nom_run_sync(Nom_cmd cmd) {
     if(WEXITSTATUS(child_status) == 0) {
       nom_log(NOM_NO_NEWLINE_DEBUG, "sync ran: ");
       nom_print_cmd(&cmd);
-      /*for(int i = 0; i <= cmd.count; i++) {
-          if(cmd.items[i] == NULL)
-          continue;
-        printf("%s ", cmd.items[i]);
-      }*/
       if(WIFSIGNALED(child_status)) {
         nom_log(NOM_WARN, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
         return 0;
@@ -555,7 +566,7 @@ unsigned int rebuild(char* file, char* compiler) {
   }
   nom_log(NOM_INFO, "renamed %s to %s", bin, old_path);
   if(!nom_run_sync(cmd)) {
-    return 0;
+    nom_log(NOM_WARN, "could not run:%s %s", cmd.items[0], cmd.items[2]);
   }
   if(!IS_PATH_EXIST(bin)) {
     nom_log(NOM_INFO, "renaming %s to %s", old_path, bin);
@@ -583,7 +594,6 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
     fprintf(stderr, "%s doesnt exist\n", file);
   }
   unsigned int file_time = fi.st_mtime;
-
   if(lib_time < file_time) {
     return 0;
   }

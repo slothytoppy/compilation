@@ -1,5 +1,5 @@
 #define NOM_IMPLEMENTATION
-#include "beta.h"
+#include "nom.h"
 
 int main(int argc, char* argv[]) {
   rebuild(__FILE__, "gcc");
