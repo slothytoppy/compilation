@@ -3,27 +3,24 @@
 
 int main(int argc, char* argv[]) {
   rebuild(__FILE__, "gcc");
-  IS_LIBRARY_MODIFIED("beta.h", "build.c", "gcc");
+  // IS_LIBRARY_MODIFIED("nom.h", "build.c", "gcc");
   //  iter_colors();
   nom_log(NOM_WARN, "hello");
   nom_log(NOM_DEBUG, "hello");
   nom_log(NOM_INFO, "hello");
   nom_log(NOM_PANIC, "hello");
-  Nom_cmd run = {0};
-  nom_cmd_append(&run, "nom");
-  if(!nom_run_path(run, NULL)) {
-    exit(1);
-  }
   int end = ends_substr("helloaskjldalksjfjasdfkljakjfdashjkfdsahk", "elloaskjldalksjfjasdfkljakjfdashjkfdsahk");
   if(end) {
     printf("has\n");
   } else
     printf("not\n");
+  /*
   int x[] = {1, 0};
   nom_cmd_append(&run, "hello");
   nom_cmd_append(&run, "hello");
   nom_cmd_append(&run, "nom");
   nom_cmd_shrink(&run, 2, x);
+  */
   //  if (IS_FILE_MODIFIED("nom.c"))
   // printf("hello\n");
   // printf("%d\n", x);

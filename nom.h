@@ -22,7 +22,6 @@ unsigned int is_path1_modified_after_path2(const char* source_path, const char* 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/inotify.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -34,7 +33,6 @@ enum log_level {
   NOM_WARN,
   NOM_PANIC,
   NOM_DEBUG,
-  NOM_NO_NEWLINE_DEBUG,
 };
 
 typedef struct
@@ -54,6 +52,16 @@ typedef struct
 
 #define DEFAULT_CAP 256
 
+typedef struct {
+  int debug_mode;
+  int new_line;
+} nom_debug_logger;
+
+nom_debug_logger nom_logger = {0};
+
+#define ENABLE_PRINT 1
+#define DISABLE_PRINT 0
+
 void nom_log(enum log_level level, const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
@@ -65,37 +73,39 @@ void nom_log(enum log_level level, const char* fmt, ...) {
 
   switch(level) {
   case NOM_DEBUG:
-#ifdef DEBUG
-    fprintf(stderr, "%s ", debug);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-    fprintf(stderr, "\n");
-#endif
+    if(nom_logger.debug_mode == 0) {
+      fprintf(stderr, "%s ", debug);
+      vfprintf(stderr, fmt, args);
+      va_end(args);
+      // nom_logger.new_line enables or disables the newline printing
+      if(nom_logger.new_line == 0) {
+        fprintf(stderr, "\n");
+      }
+    }
     break;
   case NOM_INFO:
     fprintf(stderr, "%s ", info);
     vfprintf(stderr, fmt, args);
     va_end(args);
-    fprintf(stderr, "\n");
+    if(nom_logger.new_line == 0) {
+      fprintf(stderr, "\n");
+    }
     break;
   case NOM_WARN:
     fprintf(stderr, "%s ", warn);
     vfprintf(stderr, fmt, args);
     va_end(args);
-    fprintf(stderr, "\n");
+    if(nom_logger.new_line == 0) {
+      fprintf(stderr, "\n");
+    }
     break;
   case NOM_PANIC:
     fprintf(stderr, "%s ", panic);
     vfprintf(stderr, fmt, args);
     va_end(args);
-    fprintf(stderr, "\n");
-    break;
-  case NOM_NO_NEWLINE_DEBUG:
-#ifdef DEBUG
-    fprintf(stderr, "%s ", debug);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-#endif
+    if(nom_logger.new_line == 0) {
+      fprintf(stderr, "\n");
+    }
     break;
   }
   return;
@@ -142,6 +152,18 @@ void nom_cmd_append(Nom_cmd* cmd, char* item) {
   }
 }
 
+void nom_cmd_append_many(Nom_cmd* cmd, unsigned count, ...) {
+  va_list args;
+  va_start(args, count);
+  int i = 0;
+  while(i < count) {
+    char* item = va_arg(args, char*);
+    nom_cmd_append(cmd, item);
+    i++;
+  }
+  va_end(args);
+}
+
 void nom_cmd_shrink(Nom_cmd* cmd, size_t count, int arr[]) {
   if(count > cmd->count)
     return;
@@ -162,24 +184,29 @@ void nom_cmd_shrink(Nom_cmd* cmd, size_t count, int arr[]) {
   return;
 }
 
-void nom_cmd_append_many(Nom_cmd* cmd, unsigned count, ...) {
-  va_list args;
-  va_start(args, count);
-  int i = 0;
-  while(i < count) {
-    char* item = va_arg(args, char*);
-    nom_cmd_append(cmd, item);
-    i++;
+void nom_cmd_reset(Nom_cmd* cmd) {
+  for(int i = 0; i < cmd->count; i++) {
+    cmd->items[i] = NULL;
   }
-  va_end(args);
+  cmd->count = 0;
+  return;
 }
 
-void nom_print_cmd(Nom_cmd* cmd) {
-  if(cmd->count == 0)
+void nom_print_cmd(Nom_cmd* cmd, int toggle) {
+  if(cmd->count == 0) {
+    nom_log(NOM_INFO, "cmd->items is null");
     return;
-  for(int i = 0; i < cmd->count; i++) {
-    printf("%s ", cmd->items[i]);
   }
+  if(toggle == ENABLE_PRINT) {
+    nom_logger.new_line = 1;
+    nom_log(NOM_INFO, "cmd items: ");
+  }
+  for(int i = 0; i < cmd->count; i++) {
+    if(cmd->items[i] != NULL) {
+      printf("%s[%d] ", cmd->items[i], i);
+    }
+  }
+  nom_logger.new_line = 0;
   printf("\n");
   return;
 }
@@ -196,18 +223,18 @@ void* nom_shift_args(int* argc, char*** argv) {
 unsigned int exec(char* args[]) {
   if(!args)
     return 0;
-  pid_t id = fork();
+  pid_t pid = fork();
   int child_status;
-  if(id == 0) {
+  if(pid == 0) {
     if(!execvp(args[0], args)) {
       nom_log(NOM_WARN, "exec failed, invalid path or command");
     }
   }
-  if(id < 0) {
+  if(pid < 0) {
     nom_log(NOM_WARN, "forking failed");
     return 0;
   }
-  if(waitpid(id, &child_status, 0) < 0)
+  if(waitpid(pid, &child_status, 0) < 0)
     return 0;
   return 1;
 }
@@ -245,11 +272,12 @@ unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
     nom_log(NOM_PANIC, "can not run nom_run_sync, cmd struct is empty");
     return 0;
   }
-  nom_log(NOM_INFO, "starting nom_run_path ");
+  nom_log(NOM_INFO, "starting nom_run_path");
   pid_t pid = fork();
   int child_status;
   if(pid == 0) {
     execv(cmd.items[0], args);
+    return 0;
   }
   if(pid > 0) {
     if(waitpid(pid, &child_status, 0) < 0) {
@@ -261,13 +289,13 @@ unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
       return 0;
     }
     if(WEXITSTATUS(child_status) == 0) {
-      nom_log(NOM_NO_NEWLINE_DEBUG, "nom_run_path ran: ");
-      nom_print_cmd(&cmd);
-      if(WIFSIGNALED(child_status)) {
-        nom_log(NOM_WARN, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
-        return 0;
-      }
+      nom_log(NOM_INFO, "nom_run_path ran: ");
+      nom_print_cmd(&cmd, DISABLE_PRINT);
       return 1;
+    }
+    if(WIFSIGNALED(child_status)) {
+      nom_log(NOM_WARN, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
+      return 0;
     }
   }
   return 0;
@@ -278,6 +306,7 @@ unsigned int nom_run_async(Nom_cmd cmd) {
     nom_log(NOM_PANIC, "can not run nom_run_sync, cmd struct is empty");
     return 0;
   }
+  nom_log(NOM_INFO, "starting async");
   nom_log(NOM_INFO, "starting to run %s", cmd.items[0]);
   pid_t pid = fork();
   if(pid == -1) {
@@ -285,14 +314,15 @@ unsigned int nom_run_async(Nom_cmd cmd) {
     return 0;
   }
   if(pid == 0) {
-    nom_log(NOM_NO_NEWLINE_DEBUG, "async ran: ");
-    nom_print_cmd(&cmd);
-    return pid;
+    if(execvp(cmd.items[0], cmd.items) == -1) {
+      nom_log(NOM_WARN, "could not execute child process");
+      return 0;
+    }
   }
-  if(execvp(cmd.items[0], cmd.items) == -1) {
-    nom_log(NOM_WARN, "could not execute child process");
-    return 1;
-  }
+  nom_logger.new_line = 1;
+  nom_log(NOM_INFO, "async ran: ");
+  nom_logger.new_line = 0;
+  nom_print_cmd(&cmd, DISABLE_PRINT);
   return pid;
 }
 
@@ -301,18 +331,19 @@ unsigned int nom_run_sync(Nom_cmd cmd) {
     nom_log(NOM_PANIC, "can not run nom_run_sync, cmd struct is empty");
     return 0;
   }
+  nom_log(NOM_INFO, "starting sync");
   nom_log(NOM_INFO, "starting to run %s", cmd.items[0]);
-  pid_t id = fork();
+  pid_t pid = fork();
   int child_status;
-  if(id == -1) {
+  if(pid == -1) {
     nom_log(NOM_PANIC, "fork failed in nom_run_async");
     return 0;
   }
-  if(id == 0) {
+  if(pid == 0) {
     execvp(cmd.items[0], cmd.items);
   }
-  if(id > 0) {
-    if(waitpid(id, &child_status, 0) < 0) {
+  if(pid > 0) {
+    if(waitpid(pid, &child_status, 0) < 0) {
       return 0;
     }
     if(WEXITSTATUS(child_status) != 0) {
@@ -320,8 +351,10 @@ unsigned int nom_run_sync(Nom_cmd cmd) {
       return 0;
     }
     if(WEXITSTATUS(child_status) == 0) {
-      nom_log(NOM_NO_NEWLINE_DEBUG, "sync ran: ");
-      nom_print_cmd(&cmd);
+      nom_logger.new_line = 1;
+      nom_log(NOM_INFO, "sync ran: ");
+      nom_logger.new_line = 0;
+      nom_print_cmd(&cmd, DISABLE_PRINT);
       if(WIFSIGNALED(child_status)) {
         nom_log(NOM_WARN, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
         return 0;
@@ -439,9 +472,8 @@ unsigned int IS_PATH_EXIST(char* path) {
   return 1;
 }
 
-// inotify should get rid of the need for this, it also doesnt work because
-// source time is always less than now
-unsigned int IS_FILE_MODIFIED(char* path) {
+// it doesnt work because source time is always less than now
+unsigned int IS_PATH_MODIFIED(char* path) {
   if(!path)
     return 0;
   struct stat fi;
@@ -525,7 +557,6 @@ Nom_cmd needs_rebuild1(char* input_path, char** output_paths, unsigned int count
   Nom_cmd null = {0};
   if(!input_path || !output_paths)
     return null;
-
   struct stat fi = {0};
   if(stat(input_path, &fi) < 0) {
     nom_log(NOM_WARN, "could not stat %s %s", input_path, strerror(errno));
@@ -539,12 +570,10 @@ Nom_cmd needs_rebuild1(char* input_path, char** output_paths, unsigned int count
       return null;
     }
     unsigned int output_time = fi.st_mtime;
-    printf("%d ", i);
     if(output_time > input_time) {
       nom_cmd_append(&cmd, output_paths[i]);
     }
   }
-  fflush(stdout);
   return cmd;
 }
 

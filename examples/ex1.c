@@ -7,21 +7,31 @@ int main() {
   rebuild(__FILE__, "gcc");
   // IS_LIBRARY_MODIFIED works like rebuild except it compares the last modified time of lib(the first argument) to file, i made it because i would modify nom.h and got tired of having to rebuild
   // it myself
-  //  IS_LIBRARY_MODIFIED("../nom.h", __FILE__, "gcc");
+  IS_LIBRARY_MODIFIED("../nom.h", __FILE__, "gcc");
   // returns 1 on success, if(IS_PATH_DIR) would execute what is in the if block if true
-  IS_PATH_DIR(".");
-  // like IS_PATH_DIR except for files
-  IS_PATH_FILE("ex1.c");
-  // like the above functions except it returns true if the first argument exists in the filesystem
-  IS_PATH_EXIST("ex1.c");
+  //  IS_PATH_DIR(".");
+  //  IS_PATH_FILE("ex1.c");
+  //  IS_PATH_EXIST("ex1.c");
+  //  IS_PATH_MODIFIED("ex1.c");
+  //  mkfile_if_not_exist("hello.c");
+  //  mkdir_if_not_exist("hello");
+  // sets modified time of file
+  //  set_mtime("hello.c");
+  // like IS_PATH_MODIFIED but it returns true if the first argument is modified after the second
+  //  needs_rebuild("hello.c", "ex1.c");
+  char* path[] = {"ex1.c", base(__FILE__)};
+  Nom_cmd paths = {0};
+  // like needs_rebuild but for an array of files
+  paths = needs_rebuild1("hello.c", path, 2);
+  // prints everything inside of cmd can take an extra argument that
+  // tells it whether to print [INFO] and a newline or not
+  nom_print_cmd(&paths, ENABLE_PRINT);
   char* info = "hello";
   // my logger by default appends a new line after it finishes printing
   nom_log(NOM_INFO, "%s", info);
   nom_log(NOM_WARN, "%s", info);
   nom_log(NOM_PANIC, "%s", info);
   nom_log(NOM_DEBUG, "%s", info);
-  // NOM_NO_NEWLINE_DEBUG prints out [DEBUG] without creating a new line
-  nom_log(NOM_NO_NEWLINE_DEBUG, "%s\n", info);
   Nom_cmd cmd = {0};
   nom_cmd_append_many(&cmd, 2, "echo", "--colors=true");
   if(nom_run_sync(cmd)) {
