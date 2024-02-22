@@ -27,13 +27,18 @@ unsigned int is_path1_modified_after_path2(const char* source_path, const char* 
 #include <time.h>
 #include <unistd.h>
 #include <utime.h>
+// TODO: overhaul logging
 
 enum log_level {
   NOM_INFO,
   NOM_WARN,
   NOM_PANIC,
   NOM_DEBUG,
+  NOM_NONE,
 };
+
+#define ON 0
+#define OFF 1
 
 typedef struct
 {
@@ -53,78 +58,175 @@ typedef struct
 #define DEFAULT_CAP 256
 
 typedef struct {
-  int debug_mode;
-  int new_line;
+  char* fin;
+  char* fout;
+} finfo;
+typedef struct {
+  char* debug_color;
+  char* info_color;
+  char* warn_color;
+  char* panic_color;
+} colors;
+typedef struct {
+  int lines;
+  int show_mode;
+  int show_debug;
+  colors colors;
+  finfo finfo;
 } nom_debug_logger;
 
+// everything on by default, options are OPT OUT, there may be some exceptions to this
 nom_debug_logger nom_logger = {0};
 
-#define ENABLE_PRINT 1
-#define DISABLE_PRINT 0
-
-void nom_log(enum log_level level, const char* fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
-
-  char* debug = "\033[38;5;241m[DEBUG]\033[0m";
-  char* info = "\033[38;5;208m[INFO]\033[0m";
-  char* warn = "\033[38;5;1m[WARN]\033[0m";
-  char* panic = "\033[38;5;196m[PANIC]\033[0m";
-
-  switch(level) {
-  case NOM_DEBUG:
-    if(nom_logger.debug_mode == 0) {
-      fprintf(stderr, "%s ", debug);
-      vfprintf(stderr, fmt, args);
-      va_end(args);
-      // nom_logger.new_line enables or disables the newline printing
-      if(nom_logger.new_line == 0) {
-        fprintf(stderr, "\n");
-      }
-    }
-    break;
-  case NOM_INFO:
-    fprintf(stderr, "%s ", info);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-    if(nom_logger.new_line == 0) {
-      fprintf(stderr, "\n");
-    }
-    break;
-  case NOM_WARN:
-    fprintf(stderr, "%s ", warn);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-    if(nom_logger.new_line == 0) {
-      fprintf(stderr, "\n");
-    }
-    break;
-  case NOM_PANIC:
-    fprintf(stderr, "%s ", panic);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-    if(nom_logger.new_line == 0) {
-      fprintf(stderr, "\n");
-    }
-    break;
+void nom_logger_reset_colors() {
+  if(nom_logger.colors.debug_color == NULL) {
+    nom_logger.colors.debug_color = "\033[38;5;241m[DEBUG]\033[0m";
+  }
+  if(nom_logger.colors.info_color == NULL) {
+    nom_logger.colors.info_color = "\033[38;5;208m[INFO]\033[0m";
+  }
+  if(nom_logger.colors.warn_color == NULL) {
+    nom_logger.colors.warn_color = "\033[38;5;1m[WARN]\033[0m";
+  }
+  if(nom_logger.colors.panic_color == NULL) {
+    nom_logger.colors.panic_color = "\033[38;5;196m[PANIC]\033[0m";
   }
   return;
 }
 
-void iter_colors(void) {
-  /*
-    for(int i = 0; i <= 255; i++) {
-      printf("\033[38;2;0;%d;0m%d\033[0m\n", i, i);
-    }
-    */
-  /*
-    for(int i = 0; i <= 255; i++) {
-      printf("\033[38;2;0;0;%dm%d\033[0m\n", i, i);
-    }
-  */
+void nom_logger_reset(void) {
+  nom_logger.lines = ON;
+  nom_logger.show_mode = ON;
+  nom_logger.show_debug = ON;
+  return;
+}
 
-  for(int i = 0; i <= 255; i++) {
-    printf("\033[38;2;%d;%d;%dm%d\033[0m\n", i, i, i, i);
+void nom_logger_reset_all() {
+  nom_logger_reset_colors();
+  nom_logger.lines = ON;
+  nom_logger.show_mode = ON;
+  nom_logger.show_debug = ON;
+  return;
+}
+
+void nom_gen_log(enum log_level level, const char* fmt, va_list args) {
+  if(!fmt) {
+    return;
+  }
+  nom_logger_reset_colors();
+  if(nom_logger.show_mode == OFF) {
+    level = NOM_NONE;
+  }
+  if(level == NOM_DEBUG && nom_logger.show_debug == ON) {
+    fprintf(stderr, "%s ", nom_logger.colors.debug_color);
+    vfprintf(stderr, fmt, args);
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+    return;
+  } else if(level == NOM_INFO) {
+    fprintf(stderr, "%s ", nom_logger.colors.info_color);
+    vfprintf(stderr, fmt, args);
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+  } else if(level == NOM_WARN) {
+    fprintf(stderr, "%s ", nom_logger.colors.warn_color);
+    vfprintf(stderr, fmt, args);
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+  } else if(level == NOM_PANIC) {
+    fprintf(stderr, "%s ", nom_logger.colors.panic_color);
+    vfprintf(stderr, fmt, args);
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+  }
+  return;
+}
+
+void nom_log(enum log_level level, const char* fmt, ...) {
+  if(!fmt) {
+    return;
+  }
+  va_list args;
+  va_start(args, fmt);
+  nom_gen_log(level, fmt, args);
+  va_end(args);
+  return;
+}
+
+void nom_debug_mode(enum log_level level, char* msg) {
+  if(!msg)
+    return;
+  if(level == NOM_DEBUG && nom_logger.show_debug == ON) {
+    fprintf(stderr, "%s ", nom_logger.colors.debug_color);
+    fprintf(stderr, "%s", msg);
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+  }
+  return;
+}
+
+int nom_debug_mode_cmd(enum log_level level, char* msg, Nom_cmd cmd) {
+  if(!msg || cmd.items[0] == NULL || level != NOM_DEBUG)
+    return 0;
+  if(level == NOM_DEBUG && nom_logger.show_debug == ON) {
+    fprintf(stderr, "%s ", nom_logger.colors.debug_color);
+    fprintf(stderr, "%s", msg);
+    for(int i = 0; i < cmd.count; i++) {
+      fprintf(stderr, "%s ", cmd.items[i]);
+    }
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+    return 1;
+  }
+}
+
+void nom_log_cmd(enum log_level level, char* msg, Nom_cmd cmd) {
+  if(cmd.count == 0 || cmd.items[0] == NULL) {
+    return;
+  }
+  int debug = nom_debug_mode_cmd(level, msg, cmd);
+  if(level == NOM_DEBUG && debug) {
+    return;
+  }
+  if(level == NOM_INFO) {
+    fprintf(stderr, "%s ", nom_logger.colors.info_color);
+  } else if(level == NOM_WARN) {
+    fprintf(stderr, "%s ", nom_logger.colors.warn_color);
+  } else if(level == NOM_PANIC) {
+    fprintf(stderr, "%s ", nom_logger.colors.panic_color);
+  }
+  fprintf(stderr, "%s ", msg);
+  for(int i = 0; i < cmd.count; i++) {
+    if(i > 0 && cmd.items[i] == NULL) {
+      nom_log(NOM_WARN, "cmd->%d is null", i);
+    }
+    fprintf(stderr, "%s ", cmd.items[i]);
+  }
+  if(!debug) {
+    fprintf(stderr, "\n");
+  }
+  return;
+}
+
+void logger(enum log_level level, const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  nom_gen_log(level, fmt, args);
+}
+
+void nom_file_reset(char* file) {
+  struct stat fi;
+  if(stat(file, &fi) < 0) {
+    perror("stat");
+  }
+  if(truncate(file, 0) < 0) {
+    perror("truncate");
   }
 }
 
@@ -192,25 +294,6 @@ void nom_cmd_reset(Nom_cmd* cmd) {
   return;
 }
 
-void nom_print_cmd(Nom_cmd* cmd, int toggle) {
-  if(cmd->count == 0) {
-    nom_log(NOM_INFO, "cmd->items is null");
-    return;
-  }
-  if(toggle == ENABLE_PRINT) {
-    nom_logger.new_line = 1;
-    nom_log(NOM_INFO, "cmd items: ");
-  }
-  for(int i = 0; i < cmd->count; i++) {
-    if(cmd->items[i] != NULL) {
-      printf("%s[%d] ", cmd->items[i], i);
-    }
-  }
-  nom_logger.new_line = 0;
-  printf("\n");
-  return;
-}
-
 void* nom_shift_args(int* argc, char*** argv) {
   if(*argc < 0)
     return NULL;
@@ -239,42 +322,14 @@ unsigned int exec(char* args[]) {
   return 1;
 }
 
-unsigned int run_path(char* path, char* args[]) {
-  if(!path)
-    return 0;
-  pid_t pid = fork();
-  int child_status;
-  if(pid < 0)
-    return 0;
-  if(pid == 0) {
-    execv(path, NULL);
-  }
-  if(pid > 0) {
-    if(waitpid(pid, &child_status, 0) < 0)
-      return 0;
-    if(!WEXITSTATUS(child_status)) {
-      nom_log(NOM_INFO, "%s failed to run", path);
-      return 0;
-    }
-    if(WEXITSTATUS(child_status) == 0)
-      nom_log(NOM_INFO, "%s was ran successfully", path);
-    return 1;
-    if(WIFSIGNALED(child_status)) {
-      nom_log(NOM_INFO, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
-      return 0;
-    }
-  }
-  return 0;
-}
-
 unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
-  if(cmd.count == 0) {
-    nom_log(NOM_PANIC, "can not run nom_run_sync, cmd struct is empty");
+  nom_log(NOM_DEBUG, "starting nom_run_path");
+  if(cmd.count == 0 || cmd.items[0] == NULL) {
+    nom_log(NOM_PANIC, "can not run nom_run_path, cmd struct is empty");
     return 0;
   }
-  nom_log(NOM_INFO, "starting nom_run_path");
-  pid_t pid = fork();
   int child_status;
+  pid_t pid = fork();
   if(pid == 0) {
     execv(cmd.items[0], args);
     return 0;
@@ -285,12 +340,11 @@ unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
       return 0;
     }
     if(WEXITSTATUS(child_status) != 0) {
-      nom_log(NOM_INFO, "failed to run %s", cmd.items[0]);
+      nom_log(NOM_WARN, "failed to run %s", cmd.items[0]);
       return 0;
     }
     if(WEXITSTATUS(child_status) == 0) {
-      nom_log(NOM_INFO, "nom_run_path ran: ");
-      nom_print_cmd(&cmd, DISABLE_PRINT);
+      nom_log_cmd(NOM_DEBUG, "nom_run_path ran:", cmd);
       return 1;
     }
     if(WIFSIGNALED(child_status)) {
@@ -302,15 +356,15 @@ unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
 }
 
 unsigned int nom_run_async(Nom_cmd cmd) {
-  if(cmd.count == 0) {
-    nom_log(NOM_PANIC, "can not run nom_run_sync, cmd struct is empty");
+  nom_log(NOM_DEBUG, "starting async");
+  if(cmd.count == 0 || cmd.items[0] == NULL) {
+    nom_log(NOM_PANIC, "can not run nom_run_async, cmd struct is empty");
     return 0;
   }
-  nom_log(NOM_INFO, "starting async");
-  nom_log(NOM_INFO, "starting to run %s", cmd.items[0]);
+  nom_log(NOM_DEBUG, "starting to run: %s", cmd.items[0]);
   pid_t pid = fork();
   if(pid == -1) {
-    nom_log(NOM_PANIC, "fork failed in nom_run_async");
+    nom_log(NOM_WARN, "fork failed in nom_run_async");
     return 0;
   }
   if(pid == 0) {
@@ -319,24 +373,21 @@ unsigned int nom_run_async(Nom_cmd cmd) {
       return 0;
     }
   }
-  nom_logger.new_line = 1;
-  nom_log(NOM_INFO, "async ran: ");
-  nom_logger.new_line = 0;
-  nom_print_cmd(&cmd, DISABLE_PRINT);
+  nom_log_cmd(NOM_DEBUG, "async ran:", cmd);
   return pid;
 }
 
 unsigned int nom_run_sync(Nom_cmd cmd) {
-  if(cmd.count == 0) {
+  nom_log(NOM_DEBUG, "starting sync");
+  if(cmd.count == 0 || cmd.items[0] == NULL) {
     nom_log(NOM_PANIC, "can not run nom_run_sync, cmd struct is empty");
     return 0;
   }
-  nom_log(NOM_INFO, "starting sync");
-  nom_log(NOM_INFO, "starting to run %s", cmd.items[0]);
+  nom_log(NOM_DEBUG, "starting to run: %s", cmd.items[0]);
   pid_t pid = fork();
   int child_status;
   if(pid == -1) {
-    nom_log(NOM_PANIC, "fork failed in nom_run_async");
+    nom_log(NOM_WARN, "fork failed in nom_run_async");
     return 0;
   }
   if(pid == 0) {
@@ -347,14 +398,11 @@ unsigned int nom_run_sync(Nom_cmd cmd) {
       return 0;
     }
     if(WEXITSTATUS(child_status) != 0) {
-      nom_log(NOM_INFO, "failed to run %s", cmd.items[0]);
+      nom_log(NOM_WARN, "failed to run %s", cmd.items[0]);
       return 0;
     }
     if(WEXITSTATUS(child_status) == 0) {
-      nom_logger.new_line = 1;
-      nom_log(NOM_INFO, "sync ran: ");
-      nom_logger.new_line = 0;
-      nom_print_cmd(&cmd, DISABLE_PRINT);
+      nom_log_cmd(NOM_DEBUG, "sync ran:", cmd);
       if(WIFSIGNALED(child_status)) {
         nom_log(NOM_WARN, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
         return 0;
@@ -435,7 +483,7 @@ unsigned int IS_PATH_DIR(char* path) {
   struct stat fi;
   if(stat(path, &fi) < 0) {
     if(errno == ENOENT)
-      fprintf(stderr, "could not open %s\n", path);
+      nom_log(NOM_WARN, "could not open %s", path);
     perror("errno");
     return 0;
   }
@@ -451,7 +499,7 @@ unsigned int IS_PATH_FILE(char* path) {
   struct stat fi;
   if(stat(path, &fi) < 0) {
     if(errno == ENOENT) {
-      fprintf(stderr, "%s doesnt exist\n", path);
+      nom_log(NOM_WARN, "%s doesnt exist", path);
     }
     return 0;
   }
@@ -478,7 +526,7 @@ unsigned int IS_PATH_MODIFIED(char* path) {
     return 0;
   struct stat fi;
   if(stat(path, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", path);
+    nom_log(NOM_WARN, "%s doesnt exist", path);
   }
   unsigned int source_time = fi.st_mtime;
   time_t now = time(NULL);
@@ -496,7 +544,7 @@ unsigned int mkfile_if_not_exist(char* file) {
       return 1;
     }
     if(creat(file, 0644) < 0) {
-      fprintf(stderr, "mkfile error:%s %d\n", file, errno);
+      nom_log(NOM_WARN, "mkfile error:%s %d", file, errno);
       return 0;
     }
   }
@@ -510,7 +558,7 @@ unsigned int mkdir_if_not_exist(char* path) {
   if(stat(path, &fi) != 0) {
     mode_t perms = S_IRWXU | S_IRWXG | S_IRWXO;
     if(mkdir(path, perms) < 0) {
-      fprintf(stderr, "mkdir error:%s %d\n", path, errno);
+      nom_log(NOM_WARN, "mkdir error:%s %d", path, errno);
       return 0;
     }
   }
@@ -525,7 +573,7 @@ time_t set_mtime(char* file) {
   struct stat fi;
   ntime.actime = ntime.modtime = time(NULL);
   if(utime(file, &ntime) < 0) {
-    fprintf(stderr, "could not update %s's timestamp\n", file);
+    nom_log(NOM_WARN, "could not update %s's timestamp", file);
     return 0;
   }
   if(stat(file, &fi) < 0) {
@@ -543,11 +591,11 @@ unsigned int needs_rebuild(char* str1, char* str2) {
     return 0;
   struct stat fi;
   if(stat(str1, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", str1);
+    nom_log(NOM_WARN, "%s doesnt exist", str1);
   }
   unsigned int source_time = fi.st_mtime;
   if(stat(str2, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", str2);
+    nom_log(NOM_WARN, "%s doesnt exist", str2);
   }
   unsigned int binary_time = fi.st_mtime;
   return source_time > binary_time;
@@ -583,7 +631,7 @@ unsigned int rebuild(char* file, char* compiler) {
   char* bin = base(file);
   if(!needs_rebuild(file, bin))
     return 0;
-  nom_log(NOM_INFO, "starting rebuild");
+  nom_log(NOM_DEBUG, "starting rebuild");
   char* old_path = strcat(base(file), ".old");
   Nom_cmd cmd = {0};
   nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", base(file));
@@ -602,10 +650,10 @@ unsigned int rebuild(char* file, char* compiler) {
   Nom_cmd run = {0};
   nom_cmd_append(&run, base(file));
   if(nom_run_path(run, NULL)) {
-    nom_log(NOM_INFO, "ending rebuild");
+    nom_log(NOM_DEBUG, "ending rebuild");
     exit(0);
   }
-  nom_log(NOM_INFO, "rebuild failed");
+  nom_log(NOM_WARN, "rebuild failed");
   exit(1);
 }
 
@@ -614,11 +662,11 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
     return 0;
   struct stat fi;
   if(stat(lib, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", lib);
+    nom_log(NOM_WARN, "%s doesnt exist", lib);
   }
   unsigned int lib_time = fi.st_mtime;
   if(stat(file, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", file);
+    nom_log(NOM_WARN, "%s doesnt exist", file);
   }
   unsigned int file_time = fi.st_mtime;
   if(lib_time < file_time) {
@@ -629,17 +677,16 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
   nom_log(NOM_INFO, "beginning IS_LIBRARY_MODIFIED");
   Nom_cmd cmd = {0};
   nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", base(file));
-  // nom_log(NOM_DEBUG, "%s %s %s %s", lib, file, compiler, base(file));
   if(nom_run_sync(cmd)) {
     if(utime(file, &ntime) < 0) {
-      fprintf(stderr, "could not update %s's timestamp\n", file);
+      nom_log(NOM_WARN, "could not update %s's timestamp", file);
       return 0;
     }
   }
   Nom_cmd run = {0};
   nom_cmd_append(&run, base(file));
   if(nom_run_path(run, NULL)) {
-    nom_log(NOM_INFO, "ending IS_LIBRARY_MODIFIED");
+    nom_log(NOM_DEBUG, "ending IS_LIBRARY_MODIFIED");
     exit(0);
   }
   nom_log(NOM_WARN, "IS_LIBRARY_MODIFIED failed");
