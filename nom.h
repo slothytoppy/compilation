@@ -1,94 +1,232 @@
 /*
 #ifndef NOM_IMPLEMENTATION
-char* gcwd(void); // gets the cwd
-char* upcwd(char* str1, char* str2); // if str1 is ../dir, it will move what is
-after the ../ into str2, if str2 is null it returns str1 unsigned int exec(char*
-args[]); // is a wrapper for execvp unsigned int run(char* pathname); unsigned
-int len(const char* str1); // my own strlen(not used very much but it is used)
+unsigned int exec(char* args[]); // is a wrapper for execvp
+unsigned int run(char* pathname);
+unsigned int len(const char* str1); // my own strlen(not used very much but it is used)
 unsigned int ends_with(char* str1, char with);
 const char* ext(const char* filename);
-char* base(const char* file); // only works for files that have slashes, i
-havent tested if it works for something like ../../file unsigned int
-IS_PATH_DIR(char* path); unsigned int IS_PATH_FILE(char* path); unsigned int
-IS_PATH_EXIST(char* path); unsigned int IS_PATH_MODIFIED(char* path); unsigned
-int MKFILE(char* file); unsigned int RMFILE(char* file); unsigned int
-CLEAN(char* directory, char* extension); unsigned int MKDIR(char* path);
-unsigned int RMDIR(char *path);
-unsigned int is_path1_modified_after_path2(const char* source_path, const char*
-binary_path); unsigned int print_exec(char* args[]); unsigned
-compile_simple(char* file, char* compiler); unsigned int compile_file(char*
-file, char* flags[], char* destination, char* compiler, const char* extension,
-...); unsigned int compile_targets(unsigned int sz, char* files[], char*
-destination, char* compiler, const char* extension); unsigned int
-compile_dir(char* origin, char* destination, char* compiler, const char*
-extension); unsigned int renameold(char* file); #endif
+char* base(const char* file); // only works for files that have slashes, i havent tested if it works for something like ../../file
+unsigned int IS_PATH_DIR(char* path);
+unsigned int IS_PATH_FILE(char* path);
+unsigned int IS_PATH_EXIST(char* path);
+unsigned int IS_PATH_MODIFIED(char* path);
+unsigned int is_path1_modified_after_path2(const char* source_path, const char* binary_path);
+#endif
 
 #ifdef NOM_IMPLEMENTATION
 */
 #include <dirent.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <unistd.h>
-#include <utime.h>
-
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-
-typedef const char* Cstr;
+#include <time.h>
+#include <unistd.h>
+#include <utime.h>
+// TODO: overhaul logging
 
 enum log_level {
   NOM_INFO,
   NOM_WARN,
   NOM_PANIC,
   NOM_DEBUG,
+  NOM_NONE,
 };
 
-void nom_log(enum log_level level, const char* fmt, ...) {
-#ifdef DEBUG
-  return;
-#endif
-  switch(level) {
-  case NOM_DEBUG:
-    fprintf(stderr, "[DEBUG] ");
-    break;
-  case NOM_INFO:
-    fprintf(stderr, "[INFO] ");
-    break;
-  case NOM_WARN:
-    fprintf(stderr, "[WARNING] ");
-    break;
-  case NOM_PANIC:
-    fprintf(stderr, "[PANIC] ");
-    break;
-  }
-  va_list args;
-  va_start(args, fmt);
-  vfprintf(stderr, fmt, args);
-  va_end(args);
-  fprintf(stderr, "\n");
-}
+#define ON 0
+#define OFF 1
 
-typedef struct {
+typedef struct
+{
   char** items;
   unsigned count;
   unsigned capacity;
 } Nom_cmd;
 
+typedef struct
+{
+  void** items;
+  unsigned count;
+  unsigned capacity;
+  int type;
+} Dyn_arr;
+
 #define DEFAULT_CAP 256
 
-void nom_cmd_append1(Nom_cmd* cmd, char* item) {
-  if(item == NULL)
+typedef struct {
+  char* fin;
+  char* fout;
+} finfo;
+typedef struct {
+  char* debug_color;
+  char* info_color;
+  char* warn_color;
+  char* panic_color;
+} colors;
+typedef struct {
+  int lines;
+  int show_mode;
+  int show_debug;
+  colors colors;
+  finfo finfo;
+} nom_debug_logger;
+
+// everything on by default, options are OPT OUT, there may be some exceptions to this
+nom_debug_logger nom_logger = {0};
+
+void nom_logger_reset_colors() {
+  if(nom_logger.colors.debug_color == NULL) {
+    nom_logger.colors.debug_color = "\033[38;5;241m[DEBUG]\033[0m";
+  }
+  if(nom_logger.colors.info_color == NULL) {
+    nom_logger.colors.info_color = "\033[38;5;208m[INFO]\033[0m";
+  }
+  if(nom_logger.colors.warn_color == NULL) {
+    nom_logger.colors.warn_color = "\033[38;5;1m[WARN]\033[0m";
+  }
+  if(nom_logger.colors.panic_color == NULL) {
+    nom_logger.colors.panic_color = "\033[38;5;196m[PANIC]\033[0m";
+  }
+  return;
+}
+
+void nom_logger_reset(void) {
+  nom_logger.lines = ON;
+  nom_logger.show_mode = ON;
+  nom_logger.show_debug = ON;
+  return;
+}
+
+void nom_logger_reset_all() {
+  nom_logger_reset_colors();
+  nom_logger.lines = ON;
+  nom_logger.show_mode = ON;
+  nom_logger.show_debug = ON;
+  return;
+}
+
+void nom_gen_log(enum log_level level, const char* fmt, va_list args) {
+  if(!fmt) {
     return;
-  if(cmd->count == 0) {
-    cmd->capacity = DEFAULT_CAP;
-    cmd->items = (char**)calloc(1, sizeof(cmd->items));
-    cmd->items[0] = item;
-    cmd->count++;
+  }
+  nom_logger_reset_colors();
+  if(nom_logger.show_mode == OFF) {
+    level = NOM_NONE;
+  }
+  if(level == NOM_DEBUG && nom_logger.show_debug == ON) {
+    fprintf(stderr, "%s ", nom_logger.colors.debug_color);
+    vfprintf(stderr, fmt, args);
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+    return;
+  } else if(level == NOM_INFO) {
+    fprintf(stderr, "%s ", nom_logger.colors.info_color);
+    vfprintf(stderr, fmt, args);
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+  } else if(level == NOM_WARN) {
+    fprintf(stderr, "%s ", nom_logger.colors.warn_color);
+    vfprintf(stderr, fmt, args);
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+  } else if(level == NOM_PANIC) {
+    fprintf(stderr, "%s ", nom_logger.colors.panic_color);
+    vfprintf(stderr, fmt, args);
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+  }
+  return;
+}
+
+void nom_log(enum log_level level, const char* fmt, ...) {
+  if(!fmt) {
+    return;
+  }
+  va_list args;
+  va_start(args, fmt);
+  nom_gen_log(level, fmt, args);
+  va_end(args);
+  return;
+}
+
+void nom_debug_mode(enum log_level level, char* msg) {
+  if(!msg)
+    return;
+  if(level == NOM_DEBUG && nom_logger.show_debug == ON) {
+    fprintf(stderr, "%s ", nom_logger.colors.debug_color);
+    fprintf(stderr, "%s", msg);
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+  }
+  return;
+}
+
+int nom_debug_mode_cmd(enum log_level level, char* msg, Nom_cmd cmd) {
+  if(!msg || cmd.items[0] == NULL || level != NOM_DEBUG)
+    return 0;
+  if(level == NOM_DEBUG && nom_logger.show_debug == ON) {
+    fprintf(stderr, "%s ", nom_logger.colors.debug_color);
+    fprintf(stderr, "%s", msg);
+    for(int i = 0; i < cmd.count; i++) {
+      fprintf(stderr, "%s ", cmd.items[i]);
+    }
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+    return 1;
+  }
+}
+
+void nom_log_cmd(enum log_level level, char* msg, Nom_cmd cmd) {
+  if(cmd.count == 0 || cmd.items[0] == NULL) {
+    return;
+  }
+  int debug = nom_debug_mode_cmd(level, msg, cmd);
+  if(level == NOM_DEBUG && debug) {
+    return;
+  }
+  if(level == NOM_INFO) {
+    fprintf(stderr, "%s ", nom_logger.colors.info_color);
+  } else if(level == NOM_WARN) {
+    fprintf(stderr, "%s ", nom_logger.colors.warn_color);
+  } else if(level == NOM_PANIC) {
+    fprintf(stderr, "%s ", nom_logger.colors.panic_color);
+  }
+  fprintf(stderr, "%s ", msg);
+  for(int i = 0; i < cmd.count; i++) {
+    if(i > 0 && cmd.items[i] == NULL) {
+      nom_log(NOM_WARN, "cmd->%d is null", i);
+    }
+    fprintf(stderr, "%s ", cmd.items[i]);
+  }
+  if(!debug) {
+    fprintf(stderr, "\n");
+  }
+  return;
+}
+
+void logger(enum log_level level, const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  nom_gen_log(level, fmt, args);
+}
+
+void nom_file_reset(char* file) {
+  struct stat fi;
+  if(stat(file, &fi) < 0) {
+    perror("stat");
+  }
+  if(truncate(file, 0) < 0) {
+    perror("truncate");
   }
 }
 
@@ -102,55 +240,18 @@ void nom_cmd_append(Nom_cmd* cmd, char* item) {
   }
 
   cmd->count += 1;
-  cmd->items = (char**)realloc(cmd->items, cmd->count * sizeof(cmd->items));
+  cmd->items = (char**)realloc(cmd->items, (cmd->count + 1) * sizeof(cmd->items));
   cmd->items[cmd->count - 1] = item;
+  cmd->items[cmd->count] = NULL;
 
   if(cmd->count + 1 >= cmd->capacity) {
     cmd->capacity *= 2;
     cmd->items = (char**)realloc(cmd->items, cmd->capacity * sizeof(char*));
     if(cmd->items == NULL) {
-      nom_log(NOM_PANIC, "could not allocate enough memory for cmd");
-      exit(1);
+      nom_log(NOM_PANIC, "could not allocate enough memory for cmd; buy more ram smh");
+      return;
     }
   }
-}
-
-typedef struct {
-  void** items;
-  unsigned count;
-  unsigned capacity;
-  int type;
-} Dyn_arr;
-
-void dyn_init(Dyn_arr* dyn, unsigned type) {
-  dyn->type = sizeof(type);
-}
-
-void dyn_arr_append(Dyn_arr* dyn, void* item) {
-  if(dyn->count == 0) {
-    dyn->capacity = DEFAULT_CAP;
-    dyn->items = (void**)malloc(1 * dyn->type * sizeof(item));
-    dyn->items[0] = item;
-    dyn->count++;
-    return;
-  }
-  dyn->count += 1;
-  dyn->items =
-      (void**)realloc(dyn->items, dyn->count * dyn->type * sizeof(item));
-  dyn->items[dyn->count - 1] = item;
-  if(dyn->count >= dyn->capacity) {
-    dyn->capacity *= 2;
-    dyn->items = (void**)realloc(dyn->items, dyn->capacity * dyn->type);
-    if(dyn->items == NULL) {
-      nom_log(NOM_PANIC, "could not alloc enough memory for dyn");
-      exit(1);
-    }
-  }
-  return;
-}
-
-void nom_cmd_append_null(Nom_cmd* cmd) {
-  nom_cmd_append(cmd, NULL);
 }
 
 void nom_cmd_append_many(Nom_cmd* cmd, unsigned count, ...) {
@@ -165,6 +266,34 @@ void nom_cmd_append_many(Nom_cmd* cmd, unsigned count, ...) {
   va_end(args);
 }
 
+void nom_cmd_shrink(Nom_cmd* cmd, size_t count, int arr[]) {
+  if(count > cmd->count)
+    return;
+  Nom_cmd shrunk = {0};
+  for(int i = 0; i < count; i++) {
+    if(arr[i] < cmd->count) {
+      cmd->items[arr[i]] = NULL;
+      nom_log(NOM_DEBUG, "arr[%d]=%d", i, arr[i]);
+    }
+  }
+  for(int i = 0; i <= cmd->count; i++) {
+    if(cmd->items[i] == NULL) {
+      continue;
+    }
+    nom_cmd_append(&shrunk, cmd->items[i]);
+    nom_log(NOM_DEBUG, "%s", cmd->items[i]);
+  }
+  return;
+}
+
+void nom_cmd_reset(Nom_cmd* cmd) {
+  for(int i = 0; i < cmd->count; i++) {
+    cmd->items[i] = NULL;
+  }
+  cmd->count = 0;
+  return;
+}
+
 void* nom_shift_args(int* argc, char*** argv) {
   if(*argc < 0)
     return NULL;
@@ -174,133 +303,121 @@ void* nom_shift_args(int* argc, char*** argv) {
   return result;
 }
 
-char* gcwd(void) {
-  char buff[PATH_MAX];
-  return getcwd(buff, sizeof(buff));
-}
-
-char* upcwd(char* str1, char* str2) {
-  if(str2 == NULL)
-    str2 = (char*)calloc(1, PATH_MAX);
-  if(str1 == NULL)
-    return 0;
-  char* cwd = gcwd();
-  if(strncmp(str1, "../", 3) == 0) {
-    char* cbuff = (char*)calloc(1, strlen(str1));
-    strcat(cbuff, str1);
-    char* buff = (char*)calloc(1, PATH_MAX);
-    char* sbuff = strrchr(cwd, '/');
-    strncpy(buff, str1 + 3, strlen(cwd) - strlen(sbuff));
-    strncpy(str2, cwd, strlen(cwd) - strlen(sbuff));
-    strcat(str2, "/");
-    strcat(str2, buff);
-    free(cbuff);
-    free(buff);
-    nom_log(NOM_INFO, "%s", str2);
-    return str2;
-  }
-  strcat(cwd, "/");
-  strcat(cwd, str1);
-  nom_log(NOM_INFO, "%s", str1);
-  return str1;
-}
-
 unsigned int exec(char* args[]) {
   if(!args)
     return 0;
-  pid_t id = fork();
+  pid_t pid = fork();
   int child_status;
-  if(id == 0) {
+  if(pid == 0) {
     if(!execvp(args[0], args)) {
       nom_log(NOM_WARN, "exec failed, invalid path or command");
     }
   }
-  if(id < 0) {
-    printf("forking failed\n");
+  if(pid < 0) {
+    nom_log(NOM_WARN, "forking failed");
     return 0;
   }
-  if(waitpid(id, &child_status, 0) < 0)
+  if(waitpid(pid, &child_status, 0) < 0)
     return 0;
   return 1;
 }
 
-unsigned int nom_run_async(Nom_cmd cmd) {
-  if(cmd.count <= 0) {
+unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
+  nom_log(NOM_DEBUG, "starting nom_run_path");
+  if(cmd.count == 0 || cmd.items[0] == NULL) {
+    nom_log(NOM_PANIC, "can not run nom_run_path, cmd struct is empty");
     return 0;
   }
-  cmd.items[cmd.count - 1] = NULL;
-  if(cmd.items[cmd.count - 1] != NULL) {
-    nom_log(NOM_PANIC, "cmd.items at %d is not null terminated", cmd.count);
-    exit(1);
-  }
+  int child_status;
   pid_t pid = fork();
-  if(pid == -1) {
-    nom_log(NOM_PANIC, "fork failed in nom_run_async");
-    return 0;
-  }
   if(pid == 0) {
-    for(int i = 0; i < cmd.count - 1; i++) {
-      unsigned before_null = 2;
-      printf("%s ", cmd.items[i]);
-      if(i == cmd.count - before_null) {
-        printf("\n");
-      }
-    }
-  }
-  if(execvp(cmd.items[0], cmd.items) == -1) {
-    nom_log(NOM_PANIC, "could not execute child process");
-    exit(1);
-  }
-  return pid;
-}
-
-unsigned int nom_run_async1(Nom_cmd cmd) {
-  if(cmd.count <= 0)
+    execv(cmd.items[0], args);
     return 0;
-  if(cmd.items[cmd.count] != NULL) {
-    nom_cmd_append(&cmd, NULL);
-  }
-  if(cmd.items[cmd.count] != NULL) {
-    nom_log(NOM_PANIC, "could not null terminate cmd");
-    exit(1);
-  }
-  pid_t pid = fork();
-  if(pid < 0) {
-    nom_log(NOM_PANIC, "fork failed in nom_run_async");
-    return 0;
-  }
-  if(pid == 0) {
-    if(execvp(cmd.items[0], cmd.items) < 0) {
-      nom_log(NOM_PANIC, "could not execute child process");
-      exit(1);
-    }
   }
   if(pid > 0) {
-    printf("executed: ");
-    int i;
-    for(i = 0; i < cmd.count - 1; i++) {
-      printf("%s ", cmd.items[i]);
-      if(i == cmd.count - 1)
-        printf("\n");
+    if(waitpid(pid, &child_status, 0) < 0) {
+      nom_log(NOM_WARN, "could not wait on child");
+      return 0;
+    }
+    if(WEXITSTATUS(child_status) != 0) {
+      nom_log(NOM_WARN, "failed to run %s", cmd.items[0]);
+      return 0;
+    }
+    if(WEXITSTATUS(child_status) == 0) {
+      nom_log_cmd(NOM_DEBUG, "nom_run_path ran:", cmd);
+      return 1;
+    }
+    if(WIFSIGNALED(child_status)) {
+      nom_log(NOM_WARN, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
+      return 0;
     }
   }
+  return 0;
+}
+
+unsigned int nom_run_async(Nom_cmd cmd) {
+  nom_log(NOM_DEBUG, "starting async");
+  if(cmd.count == 0 || cmd.items[0] == NULL) {
+    nom_log(NOM_PANIC, "can not run nom_run_async, cmd struct is empty");
+    return 0;
+  }
+  nom_log(NOM_DEBUG, "starting to run: %s", cmd.items[0]);
+  pid_t pid = fork();
+  if(pid == -1) {
+    nom_log(NOM_WARN, "fork failed in nom_run_async");
+    return 0;
+  }
+  if(pid == 0) {
+    if(execvp(cmd.items[0], cmd.items) == -1) {
+      nom_log(NOM_WARN, "could not execute child process");
+      return 0;
+    }
+  }
+  nom_log_cmd(NOM_DEBUG, "async ran:", cmd);
   return pid;
 }
 
 unsigned int nom_run_sync(Nom_cmd cmd) {
-  if(cmd.count <= 0)
+  nom_log(NOM_DEBUG, "starting sync");
+  if(cmd.count == 0 || cmd.items[0] == NULL) {
+    nom_log(NOM_PANIC, "can not run nom_run_sync, cmd struct is empty");
     return 0;
+  }
+  nom_log(NOM_DEBUG, "starting to run: %s", cmd.items[0]);
+  pid_t pid = fork();
   int child_status;
-  pid_t id = nom_run_async(cmd);
-  if(waitpid(id, &child_status, 0)) {
-    if(WIFEXITED(child_status)) {
-      if(WEXITSTATUS(child_status) == 0) {
-        return WEXITSTATUS(child_status);
-      } else {
-        return 1;
+  if(pid == -1) {
+    nom_log(NOM_WARN, "fork failed in nom_run_async");
+    return 0;
+  }
+  if(pid == 0) {
+    execvp(cmd.items[0], cmd.items);
+  }
+  if(pid > 0) {
+    if(waitpid(pid, &child_status, 0) < 0) {
+      return 0;
+    }
+    if(WEXITSTATUS(child_status) != 0) {
+      nom_log(NOM_WARN, "failed to run %s", cmd.items[0]);
+      return 0;
+    }
+    if(WEXITSTATUS(child_status) == 0) {
+      nom_log_cmd(NOM_DEBUG, "sync ran:", cmd);
+      if(WIFSIGNALED(child_status)) {
+        nom_log(NOM_WARN, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
+        return 0;
       }
+      return 1;
     }
   }
+  return 0;
+}
+
+unsigned int run_args(char* pathname[]) {
+  if(!pathname)
+    return 0;
+  if(exec(pathname))
+    return 1;
   return 0;
 }
 
@@ -308,49 +425,13 @@ unsigned int run(char* pathname) {
   if(!pathname)
     return 0;
   char* command[] = {pathname, NULL};
-  if(exec(command)) {
+  if(run_args(command)) {
     return 1;
   }
   return 0;
 }
 
-unsigned int len(Cstr str1) {
-  if(str1 == NULL)
-    return 0;
-  unsigned int i = 0;
-  while(*str1++) {
-    i++;
-  }
-  return i;
-}
-
-unsigned int ends_with(char* str1, char with) {
-  if(str1 == NULL || with == 0)
-    return 0;
-  unsigned int sz = len(str1);
-  nom_log(NOM_INFO, "NEEDLE IS:%c", with);
-  if(str1[sz] == with) {
-    return 1;
-  }
-  return 0;
-}
-
-const char* ext(char* filename) {
-  if(!filename)
-    return NULL;
-  unsigned int i;
-  unsigned int sz = len(filename);
-  for(i = 0; i < sz; i++) {
-    if(filename[i] == '.') {
-      char* ext = strdup(filename);
-      ext = strrchr(filename, '.');
-      return ext;
-    }
-  }
-  return filename;
-}
-
-char* base(Cstr file) {
+char* base(const char* file) {
   if(file == NULL)
     return NULL;
   char* retStr;
@@ -364,13 +445,45 @@ char* base(Cstr file) {
   return retStr;
 }
 
+int ends_substr(char* str1, char* str2) {
+  if(!str1 | !str2)
+    return 0;
+  int ned = strlen(str2);
+  int j = 0;
+  if(ned > strlen(str1))
+    return 0;
+  for(int i = strlen(str1) - ned; i < ned; i++) {
+    if(str1[i] == str2[j]) {
+      j++;
+      continue;
+    }
+    return 0;
+  }
+  return 1;
+}
+
+int has_substr(const char* const str1, const char* const str2) {
+  if(!str1 | !str2)
+    return 0;
+  int needle = strlen(str2);
+  int j = 0;
+  for(int i = strlen(str1) - needle; i < needle; i++) {
+    if(str1[i] == str2[j]) {
+      j++;
+      continue;
+    }
+    return 0;
+  }
+  return 1;
+}
+
 unsigned int IS_PATH_DIR(char* path) {
   if(!path)
     return 0;
   struct stat fi;
   if(stat(path, &fi) < 0) {
     if(errno == ENOENT)
-      fprintf(stderr, "could not open %s\n", path);
+      nom_log(NOM_WARN, "could not open %s", path);
     perror("errno");
     return 0;
   }
@@ -386,7 +499,7 @@ unsigned int IS_PATH_FILE(char* path) {
   struct stat fi;
   if(stat(path, &fi) < 0) {
     if(errno == ENOENT) {
-      fprintf(stderr, "%s doesnt exist\n", path);
+      nom_log(NOM_WARN, "%s doesnt exist", path);
     }
     return 0;
   }
@@ -407,19 +520,18 @@ unsigned int IS_PATH_EXIST(char* path) {
   return 1;
 }
 
-unsigned int IS_PATH_MODIFIED(char* path, char* path2) {
-  if(!path || !path2)
+// it doesnt work because source time is always less than now
+unsigned int IS_PATH_MODIFIED(char* path) {
+  if(!path)
     return 0;
   struct stat fi;
   if(stat(path, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", path);
+    nom_log(NOM_WARN, "%s doesnt exist", path);
   }
   unsigned int source_time = fi.st_mtime;
-  if(stat(path2, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", path2);
-  }
-  unsigned int binary_time = fi.st_mtime;
-  return source_time > binary_time;
+  time_t now = time(NULL);
+  struct tm* curtime = localtime(&now);
+  return source_time >= now;
 }
 
 unsigned int mkfile_if_not_exist(char* file) {
@@ -432,7 +544,7 @@ unsigned int mkfile_if_not_exist(char* file) {
       return 1;
     }
     if(creat(file, 0644) < 0) {
-      fprintf(stderr, "mkfile error:%s %d\n", file, errno);
+      nom_log(NOM_WARN, "mkfile error:%s %d", file, errno);
       return 0;
     }
   }
@@ -446,7 +558,7 @@ unsigned int mkdir_if_not_exist(char* path) {
   if(stat(path, &fi) != 0) {
     mode_t perms = S_IRWXU | S_IRWXG | S_IRWXO;
     if(mkdir(path, perms) < 0) {
-      fprintf(stderr, "mkdir error:%s %d\n", path, errno);
+      nom_log(NOM_WARN, "mkdir error:%s %d", path, errno);
       return 0;
     }
   }
@@ -456,122 +568,43 @@ unsigned int mkdir_if_not_exist(char* path) {
   return 0;
 }
 
-unsigned int RMFILE(char* file) {
-  if(!file)
-    return 0;
+time_t set_mtime(char* file) {
+  struct utimbuf ntime;
   struct stat fi;
-  if(stat(file, &fi) == 0) {
-    if(unlink(file) < 0) {
-      fprintf(stderr, "rmfile error:%s %d\n", file, errno);
-      return 0;
-    }
-  }
-  if(errno == ENOENT) {
-    nom_log(NOM_DEBUG, "file does not exit");
-    return 1;
-  }
-  if(!IS_PATH_EXIST(file)) {
-    nom_log(NOM_DEBUG, "%s was removed", file);
-    return 1;
-  }
-  return 0;
-}
-
-unsigned int CLEAN(char* directory, char* extension) {
-  if(directory == NULL || extension == NULL) {
-    fprintf(stderr, "directory or compiler was null\n");
+  ntime.actime = ntime.modtime = time(NULL);
+  if(utime(file, &ntime) < 0) {
+    nom_log(NOM_WARN, "could not update %s's timestamp", file);
     return 0;
   }
-  struct dirent* dirent;
-  DIR* source_dir;
-  if(strcmp(directory, ".") == 0) {
-    char buff[PATH_MAX];
-    char* cwd = getcwd(buff, sizeof(buff));
-    source_dir = opendir(cwd);
-  } else {
-    source_dir = opendir(directory);
-  }
-  if(source_dir) {
-    while((dirent = readdir(source_dir)) != NULL) {
-      if(strcmp(dirent->d_name, ".") != 0 &&
-          strcmp(dirent->d_name, "..") != 0) {
-        if(strcmp(ext(dirent->d_name), extension) == 0) {
-          RMFILE(base(dirent->d_name));
-        }
-      }
-    }
-  }
-  return 1;
-}
-
-unsigned int MKDIR(char* path) {
-}
-
-unsigned int RMDIR(char* path) {
-  if(!path)
+  if(stat(file, &fi) < 0) {
+    nom_log(NOM_WARN, "could not stat %s", file);
     return 0;
-  struct stat fi;
-  if(stat(path, &fi) == 0 && IS_PATH_DIR(path)) {
-    if(rmdir(path) < 0) {
-      fprintf(stderr, "rmdir error:%s %d\n", path, errno);
-      return 0;
-    }
   }
-  if(!IS_PATH_EXIST(path)) {
-    return 1;
-  }
-  return 0;
-}
-
-unsigned int is_path1_modified_after_path2(Cstr source_path, Cstr binary_path) {
-  if(!source_path || !binary_path)
+  if(fi.st_mtime > 0)
+    return fi.st_mtime;
+  else
     return 0;
-  struct stat fi;
-  if(stat(source_path, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", source_path);
-  }
-  unsigned int source_time = fi.st_mtime;
-  if(stat(binary_path, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", binary_path);
-  }
-  unsigned int binary_time = fi.st_mtime;
-  return source_time > binary_time;
-}
-
-unsigned int renameold(char* file) {
-  if(!file)
-    return 0;
-  char* old = (char*)calloc(1, PATH_MAX);
-  strcat(old, file);
-  strcat(old, ".old");
-  rename(file, old);
-  nom_log(NOM_INFO, "RENAMED %s TO %s", file, old);
-  return 1;
 }
 
 unsigned int needs_rebuild(char* str1, char* str2) {
-  if(!str1 || !str2)
-    return 0;
-  if(*str1 == ' ' || *str2 == ' ')
+  if(strlen(str1) <= 0 || strlen(str2) <= 0)
     return 0;
   struct stat fi;
   if(stat(str1, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", str1);
+    nom_log(NOM_WARN, "%s doesnt exist", str1);
   }
   unsigned int source_time = fi.st_mtime;
   if(stat(str2, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", str2);
+    nom_log(NOM_WARN, "%s doesnt exist", str2);
   }
   unsigned int binary_time = fi.st_mtime;
   return source_time > binary_time;
 }
 
-Nom_cmd needs_rebuild1(char* input_path, char** output_paths,
-    unsigned int count) {
+Nom_cmd needs_rebuild1(char* input_path, char** output_paths, unsigned int count) {
   Nom_cmd null = {0};
   if(!input_path || !output_paths)
     return null;
-
   struct stat fi = {0};
   if(stat(input_path, &fi) < 0) {
     nom_log(NOM_WARN, "could not stat %s %s", input_path, strerror(errno));
@@ -585,7 +618,6 @@ Nom_cmd needs_rebuild1(char* input_path, char** output_paths,
       return null;
     }
     unsigned int output_time = fi.st_mtime;
-    printf("%d ", i);
     if(output_time > input_time) {
       nom_cmd_append(&cmd, output_paths[i]);
     }
@@ -597,26 +629,32 @@ unsigned int rebuild(char* file, char* compiler) {
   if(file == NULL || compiler == NULL)
     return 0;
   char* bin = base(file);
+  if(!needs_rebuild(file, bin))
+    return 0;
+  nom_log(NOM_DEBUG, "starting rebuild");
   char* old_path = strcat(base(file), ".old");
   Nom_cmd cmd = {0};
-  nom_cmd_append_many(&cmd, 6, compiler, "-ggdb", file, "-o", base(file));
-  if(needs_rebuild(file, bin)) {
-    rename(bin, old_path);
-    nom_log(NOM_INFO, "renamed %s to %s", bin, old_path);
-    if(nom_run_sync(cmd)) {
-      if(!IS_PATH_EXIST(bin)) {
-        if(!IS_PATH_EXIST(old_path)) {
-          nom_log(NOM_WARN, "%s does not exist, no previous rollback, exiting",
-              old_path);
-          exit(1);
-        }
-        nom_log(NOM_INFO, "renaming %s to %s", old_path, bin);
-        rename(old_path, bin);
-        (bin);
-      }
-    }
+  nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", base(file));
+  rename(bin, old_path);
+  if(!IS_PATH_EXIST(old_path)) {
+    nom_log(NOM_WARN, "%s does not exist, no previous rollback, exiting", old_path);
   }
-  return 1;
+  nom_log(NOM_INFO, "renamed %s to %s", bin, old_path);
+  if(!nom_run_sync(cmd)) {
+    return 0;
+  }
+  if(!IS_PATH_EXIST(bin)) {
+    nom_log(NOM_INFO, "%s did not exist, renaming %s to %s", bin, old_path, bin);
+    rename(old_path, bin);
+  }
+  Nom_cmd run = {0};
+  nom_cmd_append(&run, base(file));
+  if(nom_run_path(run, NULL)) {
+    nom_log(NOM_DEBUG, "ending rebuild");
+    exit(0);
+  }
+  nom_log(NOM_WARN, "rebuild failed");
+  exit(1);
 }
 
 int update_path_time(char* path1, char* path2) {
@@ -645,54 +683,67 @@ int update_path_time(char* path1, char* path2) {
   }
   return path1_time == path2_time;
 }
+
 int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
   if(!lib || !file)
     return 0;
   struct stat fi;
-  struct utimbuf ntime;
-  ntime.actime = ntime.modtime = time(NULL);
   if(stat(lib, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", lib);
+    nom_log(NOM_WARN, "%s doesnt exist", lib);
   }
   unsigned int lib_time = fi.st_mtime;
   if(stat(file, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", file);
+    nom_log(NOM_WARN, "%s doesnt exist", file);
   }
-  Nom_cmd cmd = {0};
-  nom_cmd_append(&cmd, compiler);
-  nom_cmd_append(&cmd, "-ggdb");
-  nom_cmd_append(&cmd, file);
-  nom_cmd_append(&cmd, "-o");
-  nom_cmd_append(&cmd, base(file));
   unsigned int file_time = fi.st_mtime;
-  if(lib_time > file_time) {
-    if(nom_run_sync(cmd)) {
-      if(utime(file, &ntime) < 0) {
-        fprintf(stderr, "could not update %s's timestamp\n", file);
-        return 0;
-      }
-
-      return 1;
+  if(lib_time < file_time) {
+    return 0;
+  }
+  struct utimbuf ntime;
+  ntime.actime = ntime.modtime = time(NULL);
+  nom_log(NOM_INFO, "beginning IS_LIBRARY_MODIFIED");
+  Nom_cmd cmd = {0};
+  nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", base(file));
+  if(nom_run_sync(cmd)) {
+    if(utime(file, &ntime) < 0) {
+      nom_log(NOM_WARN, "could not update %s's timestamp", file);
+      return 0;
     }
   }
-  return 0;
+  Nom_cmd run = {0};
+  nom_cmd_append(&run, base(file));
+  if(nom_run_path(run, NULL)) {
+    nom_log(NOM_DEBUG, "ending IS_LIBRARY_MODIFIED");
+    exit(0);
+  }
+  nom_log(NOM_WARN, "IS_LIBRARY_MODIFIED failed");
+  exit(1);
 }
 
-// simple rebuild implementation but should always work
-#define GO_REBUILD(argc, argv, compiler)                                   \
-  {                                                                        \
-    char* file = __FILE__;                                                 \
-    if(file == NULL || argc == 0)                                          \
-      return 0;                                                            \
-    if(needs_rebuild(file, argv[0])) {                                     \
-      renameold(argv[0]);                                                  \
-      char* command[] = {compiler, "-ggdb", "-o", base(file), file, NULL}; \
-      if(exec(command)) {                                                  \
-        nom_log(NOM_INFO, "compiled %s running %s", file, argv[0]);        \
-        run(argv[0]);                                                      \
-        exit(0);                                                           \
-      }                                                                    \
-    }                                                                      \
+void dyn_init(Dyn_arr* dyn, unsigned type) {
+  dyn->type = sizeof(type);
+  dyn->count = 0;
+  dyn->capacity = DEFAULT_CAP;
+}
+
+void dyn_arr_append(Dyn_arr* dyn, void* item) {
+  if(dyn->count == 0) {
+    dyn->items = (void**)malloc(1 * dyn->type * sizeof(item));
+    dyn->items[0] = item;
+    dyn->count++;
+    return;
   }
+  dyn->count += 1;
+  dyn->items = (void**)realloc(dyn->items, dyn->count * dyn->type * sizeof(item));
+  dyn->items[dyn->count - 1] = item;
+  if(dyn->count >= dyn->capacity) {
+    dyn->capacity *= 2;
+    dyn->items = (void**)realloc(dyn->items, dyn->capacity * dyn->type);
+    if(dyn->items == NULL) {
+      nom_log(NOM_PANIC, "could not alloc enough memory for dyn; buy more ram smh");
+      return;
+    }
+  }
+}
 
 // #endif
