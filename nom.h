@@ -109,7 +109,7 @@ void nom_logger_reset_all() {
   return;
 }
 
-void nom_gen_log(enum log_level level, const char* fmt, va_list args) {
+void nom_gen_log(enum log_level level, char* fmt, va_list args) {
   if(!fmt) {
     return;
   }
@@ -123,7 +123,6 @@ void nom_gen_log(enum log_level level, const char* fmt, va_list args) {
     if(nom_logger.lines == ON) {
       fprintf(stderr, "\n");
     }
-    return;
   } else if(level == NOM_INFO) {
     fprintf(stderr, "%s ", nom_logger.colors.info_color);
     vfprintf(stderr, fmt, args);
@@ -142,11 +141,20 @@ void nom_gen_log(enum log_level level, const char* fmt, va_list args) {
     if(nom_logger.lines == ON) {
       fprintf(stderr, "\n");
     }
+  } else if(level == NOM_NONE) {
+    char* nfmt = (char*)calloc(1, strlen(fmt) + 2);
+    strcat(nfmt, " ");
+    strcat(nfmt, fmt);
+    vfprintf(stderr, nfmt, args);
+    if(nom_logger.lines == ON) {
+      fprintf(stderr, "\n");
+    }
+    free(nfmt);
   }
   return;
 }
 
-void nom_log(enum log_level level, const char* fmt, ...) {
+void nom_log(enum log_level level, char* fmt, ...) {
   if(!fmt) {
     return;
   }
@@ -214,7 +222,7 @@ void nom_log_cmd(enum log_level level, char* msg, Nom_cmd cmd) {
   return;
 }
 
-void logger(enum log_level level, const char* fmt, ...) {
+void logger(enum log_level level, char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
   nom_gen_log(level, fmt, args);
@@ -625,13 +633,22 @@ Nom_cmd needs_rebuild1(char* input_path, char** output_paths, unsigned int count
   return cmd;
 }
 
-unsigned int rebuild(char* file, char* compiler) {
-  if(file == NULL || compiler == NULL)
+unsigned int rebuild(int argc, char* argv[], char* file, char* compiler) {
+  if(file == NULL || compiler == NULL || argc < 1)
     return 0;
   char* bin = base(file);
   if(!needs_rebuild(file, bin))
     return 0;
   nom_log(NOM_DEBUG, "starting rebuild");
+  nom_logger.lines = OFF;
+  nom_log(NOM_DEBUG, "argv:");
+  if(nom_logger.show_debug == ON) {
+    for(int i = 0; i < argc; i++) {
+      nom_log(NOM_NONE, "%s", argv[i]);
+    }
+    nom_log(NOM_NONE, "\n");
+  }
+  nom_logger.lines = ON;
   char* old_path = strcat(base(file), ".old");
   Nom_cmd cmd = {0};
   nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", base(file));
@@ -639,7 +656,7 @@ unsigned int rebuild(char* file, char* compiler) {
   if(!IS_PATH_EXIST(old_path)) {
     nom_log(NOM_WARN, "%s does not exist, no previous rollback, exiting", old_path);
   }
-  nom_log(NOM_INFO, "renamed %s to %s", bin, old_path);
+  nom_log(NOM_DEBUG, "renamed %s to %s", bin, old_path);
   if(!nom_run_sync(cmd)) {
     return 0;
   }
@@ -649,7 +666,7 @@ unsigned int rebuild(char* file, char* compiler) {
   }
   Nom_cmd run = {0};
   nom_cmd_append(&run, base(file));
-  if(nom_run_path(run, NULL)) {
+  if(nom_run_path(run, argv)) {
     nom_log(NOM_DEBUG, "ending rebuild");
     exit(0);
   }
@@ -674,7 +691,7 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
   }
   struct utimbuf ntime;
   ntime.actime = ntime.modtime = time(NULL);
-  nom_log(NOM_INFO, "beginning IS_LIBRARY_MODIFIED");
+  nom_log(NOM_DEBUG, "beginning IS_LIBRARY_MODIFIED");
   Nom_cmd cmd = {0};
   nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", base(file));
   if(nom_run_sync(cmd)) {

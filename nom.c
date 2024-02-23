@@ -1,12 +1,12 @@
 #define NOM_IMPLEMENTATION
 #include "nom.h"
 
-int main() {
+int main(int argc, char* argv[]) {
   nom_logger.show_debug = OFF;
   // every function that can succeed should return either Nom_cmd or 1 on success and on failure it should return either a null nom_cmd or 0
   // nom_logger contains a variable that makes debug mode on by default
   // to disable debug info set nom_logger.debug_mode to anything but 0
-  rebuild(__FILE__, "gcc");
+  rebuild(argc, argv, __FILE__, "gcc");
   // Nom_cmd is a dynamic array for running commands
   Nom_cmd cmd = {0};
   nom_cmd_append_many(&cmd, 4, "gcc", "-g", "-c", "nom.c");
