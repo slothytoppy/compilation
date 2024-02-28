@@ -9,16 +9,12 @@ int main(int argc, char* argv[]) {
   rebuild(argc, argv, __FILE__, "gcc");
   // Nom_cmd is a dynamic array for running commands
   Nom_cmd cmd = {0};
-  nom_cmd_append_many(&cmd, 4, "gcc", "-g", "-c", "nom.c");
-  nom_run_async(cmd);
-  nom_cmd_reset(&cmd);
-  nom_cmd_append_many(&cmd, 4, "gcc", "nom.o", "-o", "nom");
+  nom_cmd_append_many(&cmd, 4, "gcc", "nom.c", "-o", "nom");
   nom_run_sync(cmd);
   // nom_run_async and nom_run_sync both run in PATH
   // there is nom_cmd_shrink which is used as follows:
   // nom_cmd_shrink(&cmd, count, arr of ints)
   // it removes the elements that are in the array
-  nom_cmd_reset(&cmd);
   // nom_logger.finfo.fout is opt in and just tells nom_print functions to print to stderr && fout
   // nom_print_cmd(NOM_INFO, "cmd->", &cmd);
   // nom_cmd_append(&cmd, "build");
