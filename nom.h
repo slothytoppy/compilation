@@ -221,38 +221,58 @@ unsigned int IS_PATH_MODIFIED(char* path) {
   return source_time >= now;
 }
 
-unsigned int mkfile_if_not_exist(char* file) {
-  if(!file)
+unsigned int mkdir_if_not_exist(char* path) {
+  if(!path)
     return 0;
   struct stat fi;
-  if(stat(file, &fi) < 0) {
-    if(errno == EEXIST) {
-      nom_log(NOM_DEBUG, "dir: %s already exists");
-      return 1;
-    }
-    if(creat(file, 0644) < 0) {
-      nom_log(NOM_WARN, "mkfile error:%s %d", file, errno);
-      return 0;
+  int len = strnlen(path, 4096);
+  char* dir = (char*)calloc(1, len);
+  for(int i = 0; i <= len; i++) {
+    if(path[i] == '/') {
+      dir = strncpy(dir, path, i);
+      if(mkdir(dir, 0755) < 0) {
+        if(errno == 17) {
+          nom_log(NOM_INFO, "%s already exists", dir);
+        } else {
+          nom_log(NOM_WARN, "error in %s:%s", __FUNCTION__, strerror(errno));
+        }
+      }
+      nom_log(NOM_INFO, "%c:%d", path[i], i);
+      nom_log(NOM_INFO, "len:%d file:%s", len, dir);
     }
   }
   return 1;
 }
 
-unsigned int mkdir_if_not_exist(char* path) {
+unsigned int mkfile_if_not_exist(char* path) {
   if(!path)
     return 0;
   struct stat fi;
-  if(stat(path, &fi) != 0) {
-    mode_t perms = S_IRWXU | S_IRWXG | S_IRWXO;
-    if(mkdir(path, perms) < 0) {
-      nom_log(NOM_WARN, "mkdir error:%s %d", path, errno);
-      return 0;
+  unsigned int len = strnlen(path, 255);
+  if(stat(path, &fi) < 0) {
+    if(errno == EEXIST) {
+      nom_log(NOM_DEBUG, "file: %s already exists");
+      return 1;
     }
   }
-  if(IS_PATH_EXIST(path)) {
-    return 1;
+  char* file = (char*)calloc(1, len);
+  for(int i = 0; i <= len; i++) {
+    strncpy(file, path, i);
+    if(file[i] == '/') {
+      if(mkdir(file, 0755) < 0) {
+        if(errno == 17) {
+          nom_log(NOM_INFO, "%s already exists", file);
+        } else {
+          nom_log(NOM_WARN, "error in %s:%s", __FUNCTION__, strerror(errno));
+        }
+      }
+    }
   }
-  return 0;
+  if(creat(file, 0644) < 0) {
+    nom_log(NOM_WARN, "mkfile error:%s %s", file, strerror(errno));
+    return 0;
+  }
+  return 1;
 }
 
 time_t set_mtime(char* file) {
