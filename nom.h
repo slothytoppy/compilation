@@ -1,4 +1,3 @@
-/*
 #ifndef NOM_IMPLEMENTATION
 unsigned int exec(char* args[]); // is a wrapper for execvp
 unsigned int run(char* pathname);
@@ -14,7 +13,6 @@ unsigned int is_path1_modified_after_path2(const char* source_path, const char* 
 #endif
 
 #ifdef NOM_IMPLEMENTATION
-*/
 
 #include <dirent.h>
 #include <errno.h>
@@ -131,7 +129,7 @@ void nom_log(enum log_level level, char* fmt, ...) {
   return;
 }
 
-int _strnlen(const char* str, unsigned int len) { // changing the standard means strnlen and strsignal arent apart of the standard so i made my own strnlen
+int _strnlen(const char* str, unsigned int len) { // changing the standard for compilation means strnlen and strsignal arent apart of the standard so i made my own strnlen
   int i;
   int len_null;
   if(len == 0) {
@@ -162,22 +160,6 @@ char* base(const char* file) {
     *lastExt = '\0';
   return retStr;
 }
-
-/*
-typedef enum { // to be used later? if i add it rn it will clog up the api, ie to figure out the file type its extra work instead of just returning 1 if something is a dir or a file
-  cstat_dir,
-  cstat_file,
-  cstat_link,
-  cstat_else,
-} mode;
-*/
-
-/*
-typedef struct {
-  struct stat fi;
-  unsigned char success;
-} cstat;
-*/
 
 unsigned IS_PATH_EXIST(char* path) {
   if(!path)
@@ -479,12 +461,8 @@ void nom_cmd_shrink(Nom_cmd* cmd, size_t count, int arr[]) {
 }
 
 void nom_cmd_reset(Nom_cmd* cmd) { // for outside use, there isnt much of a use to use it here
-  if(cmd->count == 0)
-    return;
-  for(int i = 0; i < cmd->count; i++) {
-    cmd->items[i] = NULL;
-  }
   cmd->count = 0;
+  free(cmd->items);
   return;
 }
 
@@ -595,26 +573,27 @@ unsigned int rebuild(int argc, char* argv[], char* file, char* compiler) {
     return 0;
   int newf = IS_PATH_EXIST(file);
   Nom_cmd cmd = {0};
-  if(file == NULL || compiler == NULL || argc < 1 || !compiler || !newf) {
-    nom_logger.new_line = OFF;
-    nom_log(NOM_PANIC, "failed to rebuild because: ");
-    nom_logger.show_mode = OFF;
-    nom_logger.new_line = ON;
-    if(file == NULL) {
-      nom_log(NOM_NONE, "file was null");
-    }
-    if(compiler == NULL) {
-      nom_log(NOM_NONE, "compiler was null");
-    }
-    if(argc < 1) { // apparently argc can be less than 0 if you run it using certain exec function
-      nom_log(NOM_NONE, "argc was %d instead of >= 1", argc);
-    }
-    if(!newf) {
-      nom_log(NOM_WARN, "%s does not exist", file);
-    }
-    nom_logger_reset();
+  nom_logger.new_line = OFF;
+  nom_log(NOM_PANIC, "failed to rebuild because: ");
+  nom_logger.show_mode = OFF;
+  nom_logger.new_line = ON;
+  if(file == NULL) {
+    nom_log(NOM_NONE, "file was null");
     return 0;
   }
+  if(compiler == NULL) {
+    nom_log(NOM_NONE, "compiler was null");
+    return 0;
+  }
+  if(argc < 1) { // apparently argc can be less than 0 if you run it using certain exec function
+    nom_log(NOM_NONE, "argc was %d instead of >= 1", argc);
+    return 0;
+  }
+  if(!newf) {
+    nom_log(NOM_WARN, "%s does not exist", file);
+    return 0;
+  }
+  nom_logger_reset();
   int oldf = IS_PATH_EXIST(old_path);
   if(!oldf) {
     nom_log(NOM_WARN, "no %s, no roll back in case of failure", old_path);
@@ -746,40 +725,4 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
   _exit(1);
 }
 
-/*
-typedef struct
-{
-  void** items;
-  unsigned count;
-  unsigned capacity;
-  int type;
-} Dyn_arr;
-
-void dyn_init(Dyn_arr* dyn, unsigned size_of_type) {
-  dyn->type = sizeof(size_of_type);
-  dyn->count = 0;
-  dyn->capacity = DEFAULT_CAP;
-}
-
-void dyn_arr_append(Dyn_arr* dyn, void* item) {
-  if(dyn->count == 0) {
-    dyn->items = (void**)malloc(1 * dyn->type * sizeof(item));
-    dyn->items[0] = item;
-    dyn->count++;
-    return;
-  }
-  dyn->count += 1;
-  dyn->items = (void**)realloc(dyn->items, dyn->count * dyn->type * sizeof(item));
-  dyn->items[dyn->count - 1] = item;
-  if(dyn->count >= dyn->capacity) {
-    dyn->capacity *= 2;
-    dyn->items = (void**)realloc(dyn->items, dyn->capacity * dyn->type);
-    if(dyn->items == NULL) {
-      nom_log(NOM_PANIC, "could not alloc enough memory for dyn; buy more ram smh");
-      return;
-    }
-  }
-}
-*/
-
-// #endif
+#endif
