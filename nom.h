@@ -512,7 +512,8 @@ pid_t start_process(Nom_cmd cmd) {
   }
   if(pid == 0) {
     if(execvp(cmd.items[0], cmd.items) != 0) {
-      nom_log(NOM_WARN, "could not execute child process");
+      nom_log_cmd(NOM_WARN, "could not execute", cmd);
+      nom_log(NOM_WARN, "%s", strerror(errno));
       return 0;
     }
   }
@@ -533,6 +534,7 @@ unsigned int nom_run_sync(Nom_cmd cmd) {
   int child_status;
   if(pid > 0) {
     if(waitpid(pid, &child_status, 0) < 0) {
+      nom_log(NOM_WARN, "%s", strerror(errno));
       return 0;
     }
     if(WEXITSTATUS(child_status) != 0) {
