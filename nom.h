@@ -6,6 +6,7 @@ the structure of the functions in the header: Logger, Nom_cmd, build system func
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -110,31 +111,29 @@ void nom_log(enum log_level level, char* fmt, ...) {
   return;
 }
 
-typedef struct
-{
-  char** items;
+typedef struct {
+  void** items;
   unsigned count;
   unsigned capacity;
 } Nom_cmd;
 
-#ifndef nom_internal_append
-void nom_internal_append(Nom_cmd* cmd, char* item) {
+void nom_cmd_append(Nom_cmd* cmd, void* item) {
   if(cmd->count == 0) {
     cmd->capacity = DEFAULT_CAP;
-    cmd->items = (char**)calloc(1, sizeof(cmd->items));
+    cmd->items = (void**)calloc(1, sizeof(cmd->items));
     cmd->items[0] = item;
     cmd->count++;
     return;
   }
 
   cmd->count += 1;
-  cmd->items = (char**)realloc(cmd->items, (cmd->count + 1) * sizeof(cmd->items));
+  cmd->items = (void**)realloc(cmd->items, (cmd->count + 1) * sizeof(cmd->items));
   cmd->items[cmd->count - 1] = item;
   cmd->items[cmd->count] = NULL;
 
   if(cmd->count + 1 >= cmd->capacity) {
     cmd->capacity *= 2;
-    cmd->items = (char**)realloc(cmd->items, cmd->capacity * sizeof(char*));
+    cmd->items = (void**)realloc(cmd->items, cmd->capacity * sizeof(char*));
     if(cmd->items == NULL) {
       nom_log(NOM_PANIC, "could not allocate enough memory for cmd; buy more ram smh");
       return;
@@ -142,28 +141,15 @@ void nom_internal_append(Nom_cmd* cmd, char* item) {
   }
   return;
 }
-#endif
 
-#define nob_da_append_many(da, new_items, new_items_count)                                    \
-  do {                                                                                        \
-    if((da)->count + (new_items_count) > (da)->capacity) {                                    \
-      if((da)->capacity == 0) {                                                               \
-        (da)->capacity = DEFAULT_CAP;                                                         \
-      }                                                                                       \
-      while((da)->count + (new_items_count) > (da)->capacity) {                               \
-        (da)->capacity *= 2;                                                                  \
-      }                                                                                       \
-      (da)->items = realloc((da)->items, (da)->capacity * sizeof(*(da)->items));              \
-      /* NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");*/                             \
-    }                                                                                         \
-    memcpy((da)->items + (da)->count, (new_items), (new_items_count) * sizeof(*(da)->items)); \
-    (da)->count += (new_items_count);                                                         \
-  } while(0)
-
-#ifndef nom_cmd_append
-#define nom_cmd_append(cmd, ...) \
-  nob_da_append_many(cmd, ((const char*[]){__VA_ARGS__}), (sizeof((char*[]){__VA_ARGS__}) / sizeof(char*)))
-#endif
+void nom_cmd_append_many(Nom_cmd* cmd, unsigned count, ...) {
+  va_list args;
+  va_start(args, count);
+  for(int i = 0; i < count; i++) {
+    void* arg = va_arg(args, void*);
+    nom_cmd_append(cmd, arg);
+  }
+}
 
 void nom_cmd_shrink(Nom_cmd* cmd, size_t count, int arr[]) {
   if(count > cmd->count)
@@ -217,7 +203,7 @@ unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
   int child_status;
   pid_t pid = fork();
   if(pid == 0) {
-    execv(cmd.items[0], args);
+    execv((char*)cmd.items[0], args);
     return 0;
   }
   if(pid > 0) {
@@ -253,7 +239,7 @@ pid_t start_process(Nom_cmd cmd) {
     return 0;
   }
   if(pid == 0) {
-    if(execvp(cmd.items[0], cmd.items) != 0) {
+    if(execvp((const char*)cmd.items[0], (char* const*)cmd.items) != 0) {
       nom_log(NOM_WARN, "could not execute child process");
       return 0;
     }
@@ -476,7 +462,7 @@ int mkfile_if_not_exist(char* path) {
   }
 }
 
-time_t set_mtime(char* file) {
+time_t nom_set_mtime(char* file) {
   struct utimbuf ntime;
   struct stat fi;
   ntime.actime = ntime.modtime = time(NULL);
@@ -504,19 +490,20 @@ void* nom_shift_args(int* argc, char*** argv) {
   return result;
 }
 
-unsigned int needs_rebuild(char* str1, char* str2) {
-  if(strlen(str1) <= 0 || strlen(str2) <= 0)
-    return 0;
+long int nom_get_mtime(char* file) {
   struct stat fi;
-  if(stat(str1, &fi) < 0) {
-    nom_log(NOM_WARN, "%s doesnt exist", str1);
+  if(stat(file, &fi) < 0) {
+    nom_log(NOM_WARN, "%s", strerror(errno));
   }
-  unsigned int source_time = fi.st_mtime;
-  if(stat(str2, &fi) < 0) {
-    nom_log(NOM_WARN, "%s doesnt exist", str2);
-  }
-  unsigned int binary_time = fi.st_mtime;
-  return source_time > binary_time;
+  return fi.st_mtime;
+}
+
+bool needs_rebuild(char* source_file, char* old_file) {
+  if(source_file == NULL || old_file == NULL)
+    return 0;
+  long int source_time = nom_get_mtime(source_file);
+  long int old_time = nom_get_mtime(old_file);
+  return source_time > old_time;
 }
 
 unsigned int rebuild(int argc, char* argv[], char* file, char* compiler) {
@@ -563,7 +550,7 @@ unsigned int rebuild(int argc, char* argv[], char* file, char* compiler) {
     nom_log(NOM_NONE, "\n");
   }
   nom_logger_reset();
-  nom_cmd_append(&cmd, compiler, "-ggdb", file, "-o", bin);
+  nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", bin);
   if(!nom_run_sync(cmd)) {
     nom_log_cmd(NOM_WARN, "failed to run:", cmd);
   }
@@ -637,9 +624,9 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
   ntime.actime = ntime.modtime = time(NULL);
   nom_log(NOM_DEBUG, "beginning IS_LIBRARY_MODIFIED");
   Nom_cmd cmd = {0};
-  nom_cmd_append(&cmd, compiler, "-ggdb", file, "-o", base(file));
+  nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", base(file));
   if(nom_run_sync(cmd)) {
-    set_mtime(file);
+    nom_set_mtime(file);
   }
   Nom_cmd run = {0};
   nom_cmd_append(&run, base(file));
