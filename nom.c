@@ -9,7 +9,8 @@ int main(int argc, char* argv[]) {
   rebuild(argc, argv, __FILE__, "gcc");
   // Nom_cmd is a dynamic array for running commands
   Nom_cmd cmd = {0};
-  nom_cmd_append_many(&cmd, 4, "gcc", "nom.c", "-o", "nom");
+  nom_cmd_append(&cmd, "/usr/bin/eza", "-l");
+  nom_log_cmd(NOM_INFO, "cmd->", cmd);
   pid_t pid = start_process(cmd);
   nom_log(NOM_INFO, "%d", pid);
   nom_run_sync(cmd);
@@ -20,8 +21,10 @@ int main(int argc, char* argv[]) {
   // it removes the elements that are in the array up to count
   // nom_print_cmd(NOM_INFO, "cmd->", &cmd);
   nom_cmd_reset(&cmd);
-  nom_cmd_append(&cmd, NULL);
-  nom_run_path(cmd, NULL);
+  nom_log_cmd(NOM_INFO, "cmd again->", cmd);
+  nom_cmd_append(&cmd, "./build", "build");
+  nom_run_path(cmd, argv);
+  nom_log_cmd(NOM_INFO, "cmd again->", cmd);
   // nom_log(NOM_INFO, "hello");
   // nom_run_path and nom_run_sync both return 1 on success and 0 on failure
   //  nom_run_async returns pid on success and 0 on failure
