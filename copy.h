@@ -1,3 +1,5 @@
+#ifndef NOM_IMPLEMENTATION
+#define NOM_IMPLEMENTATION
 /*
 the structure of the functions in the header: Logger, Nom_cmd, build system functionality with some helper functions, and some memory functions
 */
@@ -473,31 +475,6 @@ void* nom_shift_args(int* argc, char*** argv) {
   return result;
 }
 
-void nom_cmd_append(Nom_cmd* cmd, char* item) {
-  if(cmd->count == 0) {
-    cmd->capacity = DEFAULT_CAP;
-    cmd->items = (void**)calloc(1, sizeof(cmd->items));
-    cmd->items[0] = item;
-    cmd->count++;
-    return;
-  }
-
-  cmd->count += 1;
-  cmd->items = (void**)realloc(cmd->items, (cmd->count + 1) * sizeof(cmd->items));
-  cmd->items[cmd->count - 1] = item;
-  cmd->items[cmd->count] = NULL;
-
-  if(cmd->count + 1 >= cmd->capacity) {
-    cmd->capacity *= 2;
-    cmd->items = (void**)realloc(cmd->items, cmd->capacity * sizeof(char*));
-    if(cmd->items == NULL) {
-      nom_log(NOM_PANIC, "could not allocate enough memory for cmd; buy more ram smh");
-      return;
-    }
-  }
-  return;
-}
-
 long int nom_get_mtime(char* file) {
   struct stat fi;
   if(stat(file, &fi) < 0) {
@@ -587,33 +564,6 @@ unsigned int rebuild(int argc, char* argv[], char* file, char* compiler) {
   return 1;
 }
 
-int update_path_time(char* path1, char* path2) {
-  if(!path1 || !path2)
-    return 0;
-  struct stat fi;
-  struct utimbuf ntime;
-  ntime.actime = ntime.modtime = time(NULL);
-  if(stat(path1, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", path1);
-    return 0;
-  }
-  unsigned int path1_time = fi.st_mtime;
-  if(stat(path2, &fi) < 0) {
-    fprintf(stderr, "%s doesnt exist\n", path2);
-    return 0;
-  }
-  unsigned int path2_time = fi.st_mtime;
-  if(utime(path1, &ntime) < 0) {
-    fprintf(stderr, "could not update %s's timestamp\n", path1);
-    return 0;
-  }
-  if(utime(path2, &ntime) < 0) {
-    fprintf(stderr, "could not update %s's timestamp\n", path2);
-    return 0;
-  }
-  return path1_time == path2_time;
-}
-
 unsigned int rebuild1(char* file, char* compiler) {
   if(!file || !compiler)
     return 0;
@@ -700,3 +650,5 @@ void* map_file_into_memory(char* file) {
 void unmap_file_from_memory(void* ptr, long int size) {
   munmap(ptr, size);
 }
+
+#endif // NOM_IMPLEMENTATION
