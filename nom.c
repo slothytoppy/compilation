@@ -9,7 +9,7 @@ int main(int argc, char* argv[]) {
   rebuild(argc, argv, __FILE__, "gcc");
   // Nom_cmd is a dynamic array for running commands
   Nom_cmd cmd = {0};
-  nom_cmd_append(&cmd, "/usr/bin/eza", "-l");
+  nom_cmd_append_many(&cmd, 2, "/usr/bin/eza", "-l");
   nom_log_cmd(NOM_INFO, "cmd->", cmd);
   pid_t pid = start_process(cmd);
   nom_log(NOM_INFO, "%d", pid);
@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
   // nom_print_cmd(NOM_INFO, "cmd->", &cmd);
   nom_cmd_reset(&cmd);
   nom_log_cmd(NOM_INFO, "cmd again->", cmd);
-  nom_cmd_append(&cmd, "./build", "build");
+  nom_cmd_append_many(&cmd, 2, "./build", "build");
   nom_run_path(cmd, argv);
   nom_log_cmd(NOM_INFO, "cmd again->", cmd);
   // nom_log(NOM_INFO, "hello");

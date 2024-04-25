@@ -1,3 +1,5 @@
+#ifndef NOM_IMPLEMENTATION
+#define NOM_IMPLEMENTATION
 /*
 the structure of the functions in the header: Logger, Nom_cmd, build system functionality with some helper functions, and some memory functions
 */
@@ -648,3 +650,5 @@ void* map_file_into_memory(char* file) {
 void unmap_file_from_memory(void* ptr, long int size) {
   munmap(ptr, size);
 }
+
+#endif // NOM_IMPLEMENTATION
