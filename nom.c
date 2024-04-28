@@ -23,8 +23,10 @@ int main(int argc, char* argv[]) {
   nom_cmd_reset(&cmd);
   nom_log_cmd(NOM_INFO, "cmd again->", cmd);
   nom_cmd_append_many(&cmd, 2, "./build", "build");
-  nom_run_path(cmd, argv);
+  nom_run_path(cmd);
   nom_log_cmd(NOM_INFO, "cmd again->", cmd);
+  long int ind[2] = {0, 1};
+  nom_cmd_shrink(&cmd, 2, ind);
   // nom_log(NOM_INFO, "hello");
   // nom_run_path and nom_run_sync both return 1 on success and 0 on failure
   //  nom_run_async returns pid on success and 0 on failure
