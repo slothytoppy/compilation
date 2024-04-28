@@ -117,13 +117,13 @@ typedef struct {
   unsigned capacity;
 } Nom_cmd;
 
-void nom_cmd_append(Nom_cmd* cmd, void* item) {
+bool nom_cmd_append(Nom_cmd* cmd, void* item) {
   if(cmd->count == 0) {
     cmd->capacity = DEFAULT_CAP;
     cmd->items = (void**)calloc(1, sizeof(cmd->items));
     cmd->items[0] = item;
     cmd->count++;
-    return;
+    return true;
   }
 
   cmd->count += 1;
@@ -136,10 +136,10 @@ void nom_cmd_append(Nom_cmd* cmd, void* item) {
     cmd->items = (void**)realloc(cmd->items, cmd->capacity * sizeof(char*));
     if(cmd->items == NULL) {
       nom_log(NOM_PANIC, "could not allocate enough memory for cmd; buy more ram smh");
-      return;
+      return false;
     }
   }
-  return;
+  return true;
 }
 
 void nom_cmd_append_many(Nom_cmd* cmd, unsigned count, ...) {
@@ -152,6 +152,23 @@ void nom_cmd_append_many(Nom_cmd* cmd, unsigned count, ...) {
 }
 
 // TODO: actually implement nom_cmd_shrink
+Nom_cmd nom_cmd_shrink(Nom_cmd* cmd, long int count, long int ind[]) {
+  Nom_cmd new_cmd = {0};
+  for(int i = 0; i < cmd->count; i++) {
+    for(int i = 0; i < count; i++) {
+      if(ind[i] > cmd->count) {
+        return new_cmd; // empty cmd
+      }
+      long int index = ind[i];
+      cmd->items[index] = NULL;
+      cmd->count -= 1;
+    }
+    if(cmd->items[i] != NULL) {
+      nom_cmd_append(&new_cmd, cmd->items[i]);
+    }
+  }
+  return new_cmd;
+}
 
 void nom_cmd_reset(Nom_cmd* cmd) { // for outside use, there isnt much of a use to use it here
   for(int i = 0; cmd->items[i]; i++)
@@ -176,37 +193,37 @@ void nom_log_cmd(enum log_level level, char* msg, Nom_cmd cmd) {
   return;
 }
 
-unsigned int nom_run_path(Nom_cmd cmd, char* args[]) {
+bool nom_run_path(Nom_cmd cmd) {
   nom_log(NOM_INFO, "starting nom_run_path");
   if(cmd.count == 0 || cmd.items[0] == NULL) {
     nom_log(NOM_WARN, "can not run nom_run_path, cmd struct is empty");
-    return 0;
+    return false;
   }
   int child_status;
   pid_t pid = fork();
   if(pid == 0) {
-    execv((char*)cmd.items[0], args);
-    return 0;
+    execv((char*)cmd.items[0], (char**)cmd.items);
+    return false;
   }
   if(pid > 0) {
     if(waitpid(pid, &child_status, 0) < 0) {
       nom_log(NOM_WARN, "could not wait on child:%s", strerror(errno));
-      return 0;
+      return false;
     }
     if(WEXITSTATUS(child_status) != 0) {
       nom_log(NOM_WARN, "failed to run %s", cmd.items[0]);
-      return 0;
+      return false;
     }
     if(WEXITSTATUS(child_status) == 0) {
       nom_log_cmd(NOM_INFO, "nom_run_path ran:", cmd);
-      return 1;
+      return true;
     }
     if(WIFSIGNALED(child_status)) {
       nom_log(NOM_WARN, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
-      return 0;
+      return false;
     }
   }
-  return 0;
+  return false;
 }
 
 pid_t start_process(Nom_cmd cmd) {
@@ -237,28 +254,28 @@ unsigned int nom_run_async(Nom_cmd cmd) {
   return pid;
 }
 
-unsigned int nom_run_sync(Nom_cmd cmd) {
+bool nom_run_sync(Nom_cmd cmd) {
   nom_log(NOM_INFO, "starting sync");
   pid_t pid = start_process(cmd);
   int child_status;
   if(pid > 0) {
     if(waitpid(pid, &child_status, 0) < 0) {
-      return 0;
+      return false;
     }
     if(WEXITSTATUS(child_status) != 0) {
       nom_log(NOM_WARN, "failed to run %s", cmd.items[0]);
-      return 0;
+      return false;
     }
     if(WEXITSTATUS(child_status) == 0) {
       nom_log_cmd(NOM_INFO, "sync ran:", cmd);
-      if(WIFSIGNALED(child_status)) {
-        nom_log(NOM_WARN, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
-        return 0;
-      }
-      return 1;
+      return true;
+    }
+    if(WIFSIGNALED(child_status)) {
+      nom_log(NOM_WARN, "command process was terminated by %s", strsignal(WTERMSIG(child_status)));
+      return false;
     }
   }
-  return 0;
+  return false;
 }
 
 int _strnlen(const char* const str, unsigned int len) { // changing the standard for compilation means strnlen and strsignal arent apart of the standard so i made my own strnlen
@@ -303,7 +320,7 @@ char* base(const char* file) {
   return retStr;
 }
 
-char* file_name(const char* const file, const char delim) {
+char* base_file(const char* const file, const char delim) {
   if(file == NULL) {
     return NULL;
   }
@@ -314,62 +331,65 @@ char* file_name(const char* const file, const char delim) {
 }
 
 unsigned IS_PATH_EXIST(char* path) {
-  if(!path)
-    return 0;
+  if(!path) {
+    return false;
+  }
   struct stat fi;
   if(stat(path, &fi) < 0) {
     if(errno != ENOENT) {
       nom_log(NOM_WARN, "error: %s %s", path, strerror(errno));
     }
-    return 0;
+    return false;
   }
-  return 1;
+  return true;
 }
 
 unsigned int IS_PATH_DIR(char* path) {
-  if(!path)
-    return 0;
+  if(!path) {
+    return false;
+  }
   struct stat fi;
   if(stat(path, &fi) < 0) {
     nom_log(NOM_INFO, "%s does not exist", path);
-    return 0;
+    return false;
   }
   if(S_ISDIR(fi.st_mode)) {
-    return 1;
+    return true;
   }
-  return 0;
+  return false;
 }
 
 unsigned int IS_PATH_FILE(char* path) {
-  if(!path)
-    return 0;
+  if(!path) {
+    return false;
+  }
   struct stat fi;
   if(stat(path, &fi) < 0) {
     nom_log(NOM_INFO, "%s does not exist", path);
-    return 0;
+    return false;
   }
   if(S_ISREG(fi.st_mode)) {
-    return 1;
+    return true;
   }
-  return 0;
+  return false;
 }
 
 unsigned int mkdir_loop(char* path) {
   if(!path) {
-    return 0;
+    return false;
   }
   int len = _strnlen(path, 4096);
   nom_log(NOM_INFO, "len:%d", len);
   if(len <= 0) {
     nom_log(NOM_WARN, "_strnlen returned %d in %s", len, __FUNCTION__);
-    return 0;
+    return false;
   }
   if(len > 4096) {
     nom_log(NOM_PANIC, "path is longer than %d, exiting", 4096);
-    return 0;
+    return false;
   }
   if(IS_PATH_EXIST(path)) {
-    return 1;
+    return true;
   }
   int i = 0;
   if(path[0] == '.' && path[1] == '/') {
@@ -391,29 +411,29 @@ unsigned int mkdir_loop(char* path) {
   }
   if(mkdir(path, 0755) != 0) {
     nom_log(NOM_WARN, "path: %s %s", path, strerror(errno));
-    return 0;
+    return false;
   }
-  return 1;
+  return true;
 }
 
-unsigned int mkdir_if_not_exist(char* path) {
+bool mkdir_if_not_exist(char* path) {
   if(!path) {
-    return 0;
+    return false;
   }
   return mkdir_loop(path);
 }
 
-unsigned int mkfile_loop(char* path) {
+bool mkfile_loop(char* path) {
   if(!path)
     return 0;
   struct stat fi;
   unsigned int len = _strnlen(path, 255);
   if(len <= 0) {
     nom_log(NOM_WARN, "_strnlen returned %d in %s", len, __FUNCTION__);
-    return 0;
+    return false;
   }
   if(IS_PATH_EXIST(path)) {
-    return 1;
+    return true;
   }
   char* file = (char*)calloc(1, len);
   for(int i = 0; i <= len; i++) {
@@ -433,34 +453,74 @@ unsigned int mkfile_loop(char* path) {
   }
   if(creat(file, 0644) < 0) {
     nom_log(NOM_WARN, "mkfile error:%s %s", file, strerror(errno));
-    return 0;
+    return false;
   }
-  return 1;
+  return true;
 }
 
-int mkfile_if_not_exist(char* path) {
+bool mkfile_if_not_exist(char* path) {
   if(!path) {
-    return 0;
+    return false;
   }
   return mkfile_loop(path);
 }
 
-time_t nom_set_mtime(char* file) {
+long int nom_get_mtime(char* file) {
+  struct stat fi;
+  if(stat(file, &fi) < 0) {
+    nom_log(NOM_WARN, "%s", strerror(errno));
+  }
+  return fi.st_mtime;
+}
+
+bool nom_update_mtime(char* file) {
   struct utimbuf ntime;
   struct stat fi;
-  ntime.actime = ntime.modtime = time(NULL);
-  if(utime(file, &ntime) < 0) {
-    nom_log(NOM_WARN, "could not update %s's timestamp", file);
-    return 0;
-  }
   if(stat(file, &fi) < 0) {
     nom_log(NOM_WARN, "could not stat %s", file);
     return 0;
   }
-  if(fi.st_mtime > 0)
-    return fi.st_mtime;
-  else
-    return 0;
+  ntime.modtime = time(NULL);
+  if(utime(file, &ntime) < 0) {
+    nom_log(NOM_WARN, "could not update %s's timestamp", file);
+    return false;
+  }
+  return true;
+}
+
+char* nom_get_file_perms(char* file) {
+  char* perms = (char*)calloc(1, 9);
+  struct stat fi;
+  stat(file, &fi);
+  char* _perms = "rwx-";
+  perms[0] = (fi.st_mode & S_IRUSR) ? _perms[0] : _perms[3];
+  perms[1] = (fi.st_mode & S_IWUSR) ? _perms[1] : _perms[3];
+  perms[2] = (fi.st_mode & S_IXUSR) ? _perms[2] : _perms[3];
+  perms[3] = (fi.st_mode & S_IRGRP) ? _perms[0] : _perms[3];
+  perms[4] = (fi.st_mode & S_IWGRP) ? _perms[1] : _perms[3];
+  perms[5] = (fi.st_mode & S_IXGRP) ? _perms[2] : _perms[3];
+  perms[6] = (fi.st_mode & S_IROTH) ? _perms[0] : _perms[3];
+  perms[7] = (fi.st_mode & S_IWOTH) ? _perms[1] : _perms[3];
+  perms[8] = (fi.st_mode & S_IXOTH) ? _perms[2] : _perms[3];
+  return perms;
+}
+
+char* nom_fsize_to_cstr(char* file) {
+  struct stat fi;
+  stat(file, &fi);
+  struct tm* tm = localtime(&fi.st_mtime);
+  char* time = (char*)calloc(1, 200);
+  memset(time, '\0', 200);
+  strftime(time, 200, "%a %H:%M:%S", tm);
+  return time;
+}
+
+long int nom_get_fsize(char* file) {
+  struct stat fi;
+  if(stat(file, &fi) < 0) {
+    nom_log(NOM_WARN, "%s", strerror(errno));
+  }
+  return fi.st_size;
 }
 
 // gets rid of program name by increment argv and decrementing argc
@@ -473,25 +533,13 @@ void* nom_shift_args(int* argc, char*** argv) {
   return result;
 }
 
-long int nom_get_mtime(char* file) {
-  struct stat fi;
-  if(stat(file, &fi) < 0) {
-    nom_log(NOM_WARN, "%s", strerror(errno));
-  }
-  return fi.st_mtime;
-}
-
-long int nom_get_fsize(char* file) {
-  struct stat fi;
-  if(stat(file, &fi) < 0) {
-    nom_log(NOM_WARN, "%s", strerror(errno));
-  }
-  return fi.st_size;
-}
-
 bool needs_rebuild(char* source_file, char* old_file) {
-  if(source_file == NULL || old_file == NULL)
-    return 0;
+  if(source_file == NULL || old_file == NULL) {
+    return false;
+  }
+  if(!IS_PATH_EXIST(source_file) || !IS_PATH_EXIST(old_file)) {
+    return false;
+  }
   long int source_time = nom_get_mtime(source_file);
   long int old_time = nom_get_mtime(old_file);
   return source_time > old_time;
@@ -553,7 +601,10 @@ unsigned int rebuild(int argc, char* argv[], char* file, char* compiler) {
   }
   Nom_cmd run = {0};
   nom_cmd_append(&run, base(file));
-  if(nom_run_path(run, argv)) {
+  for(int i = 0; i < argc; i++) {
+    nom_cmd_append(&run, argv[i]);
+  }
+  if(nom_run_path(run)) {
     nom_log(NOM_INFO, "ending rebuild");
     _exit(0);
   }
@@ -617,11 +668,11 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
   Nom_cmd cmd = {0};
   nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", base(file));
   if(nom_run_sync(cmd)) {
-    nom_set_mtime(file);
+    nom_update_mtime(file);
   }
   Nom_cmd run = {0};
   nom_cmd_append(&run, base(file));
-  if(nom_run_path(run, NULL)) {
+  if(nom_run_path(run)) {
     nom_log(NOM_DEBUG, "ending IS_LIBRARY_MODIFIED");
     _exit(0);
   }
