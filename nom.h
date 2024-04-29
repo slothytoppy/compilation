@@ -194,7 +194,7 @@ void nom_log_cmd(enum log_level level, char* msg, Nom_cmd cmd) {
 }
 
 bool nom_run_path(Nom_cmd cmd) {
-  nom_log(NOM_INFO, "starting nom_run_path");
+  nom_log_cmd(NOM_INFO, "starting", cmd);
   if(cmd.count == 0 || cmd.items[0] == NULL) {
     nom_log(NOM_WARN, "can not run nom_run_path, cmd struct is empty");
     return false;
@@ -211,11 +211,10 @@ bool nom_run_path(Nom_cmd cmd) {
       return false;
     }
     if(WEXITSTATUS(child_status) != 0) {
-      nom_log(NOM_WARN, "failed to run %s", cmd.items[0]);
+      nom_log_cmd(NOM_WARN, "failed to run", cmd);
       return false;
     }
     if(WEXITSTATUS(child_status) == 0) {
-      nom_log_cmd(NOM_INFO, "nom_run_path ran:", cmd);
       return true;
     }
     if(WIFSIGNALED(child_status)) {
@@ -228,10 +227,9 @@ bool nom_run_path(Nom_cmd cmd) {
 
 pid_t start_process(Nom_cmd cmd) {
   if(cmd.count == 0 || cmd.items[0] == NULL) {
-    nom_log(NOM_WARN, "can not run nom_run_async, cmd struct is empty");
+    nom_log(NOM_WARN, "can not run start_process, cmd struct is empty");
     return 0;
   }
-  nom_log(NOM_INFO, "starting to run: %s", cmd.items[0]);
   pid_t pid = fork();
   if(pid == -1) {
     nom_log(NOM_WARN, "fork failed in nom_run_async");
@@ -250,12 +248,11 @@ unsigned int nom_run_async(Nom_cmd cmd) {
   nom_log(NOM_DEBUG, "starting async");
   pid_t pid = start_process(cmd);
   nom_log_cmd(NOM_INFO, "async ran:", cmd);
-  nom_log(NOM_INFO, "pid:%d", pid);
   return pid;
 }
 
 bool nom_run_sync(Nom_cmd cmd) {
-  nom_log(NOM_INFO, "starting sync");
+  nom_log_cmd(NOM_INFO, "starting", cmd);
   pid_t pid = start_process(cmd);
   int child_status;
   if(pid > 0) {
@@ -267,7 +264,6 @@ bool nom_run_sync(Nom_cmd cmd) {
       return false;
     }
     if(WEXITSTATUS(child_status) == 0) {
-      nom_log_cmd(NOM_INFO, "sync ran:", cmd);
       return true;
     }
     if(WIFSIGNALED(child_status)) {
@@ -330,7 +326,7 @@ char* base_file(const char* const file, const char delim) {
   return retstr;
 }
 
-unsigned IS_PATH_EXIST(char* path) {
+bool IS_PATH_EXIST(char* path) {
   if(!path) {
     return false;
   }
@@ -350,7 +346,6 @@ unsigned int IS_PATH_DIR(char* path) {
   }
   struct stat fi;
   if(stat(path, &fi) < 0) {
-    nom_log(NOM_INFO, "%s does not exist", path);
     return false;
   }
   if(S_ISDIR(fi.st_mode)) {
@@ -365,7 +360,6 @@ unsigned int IS_PATH_FILE(char* path) {
   }
   struct stat fi;
   if(stat(path, &fi) < 0) {
-    nom_log(NOM_INFO, "%s does not exist", path);
     return false;
   }
   if(S_ISREG(fi.st_mode)) {
@@ -379,7 +373,6 @@ unsigned int mkdir_loop(char* path) {
     return false;
   }
   int len = _strnlen(path, 4096);
-  nom_log(NOM_INFO, "len:%d", len);
   if(len <= 0) {
     nom_log(NOM_WARN, "_strnlen returned %d in %s", len, __FUNCTION__);
     return false;
@@ -402,10 +395,9 @@ unsigned int mkdir_loop(char* path) {
     if(path[i] == '/') {
       if(IS_PATH_EXIST(dir))
         continue;
-      if(mkdir(dir, 0755) == 0) {
-        nom_log(NOM_INFO, "created dir: %s", dir);
-      } else {
+      if(mkdir(dir, 0755) != 0) {
         nom_log(NOM_WARN, "dir: %s %s", dir, strerror(errno));
+        return false;
       }
     }
   }
@@ -437,7 +429,7 @@ bool mkfile_loop(char* path) {
   }
   char* file = (char*)calloc(1, len);
   for(int i = 0; i <= len; i++) {
-    if(path[0] == '.' && path[1] == '/') {
+    if(path[i] == '.' && path[i + 1] == '/') {
       len += 2;
       i += 2;
       file = (char*)realloc(file, len);
@@ -447,6 +439,7 @@ bool mkfile_loop(char* path) {
       if(mkdir(file, 0755) < 0) {
         if(errno != 17) {
           nom_log(NOM_WARN, "error %s:%s", path, strerror(errno));
+          return false;
         }
       }
     }
@@ -473,7 +466,7 @@ long int nom_get_mtime(char* file) {
   return fi.st_mtime;
 }
 
-bool nom_update_mtime(char* file) {
+bool nom_set_mtime(char* file) {
   struct utimbuf ntime;
   struct stat fi;
   if(stat(file, &fi) < 0) {
@@ -486,33 +479,6 @@ bool nom_update_mtime(char* file) {
     return false;
   }
   return true;
-}
-
-char* nom_get_file_perms(char* file) {
-  char* perms = (char*)calloc(1, 9);
-  struct stat fi;
-  stat(file, &fi);
-  char* _perms = "rwx-";
-  perms[0] = (fi.st_mode & S_IRUSR) ? _perms[0] : _perms[3];
-  perms[1] = (fi.st_mode & S_IWUSR) ? _perms[1] : _perms[3];
-  perms[2] = (fi.st_mode & S_IXUSR) ? _perms[2] : _perms[3];
-  perms[3] = (fi.st_mode & S_IRGRP) ? _perms[0] : _perms[3];
-  perms[4] = (fi.st_mode & S_IWGRP) ? _perms[1] : _perms[3];
-  perms[5] = (fi.st_mode & S_IXGRP) ? _perms[2] : _perms[3];
-  perms[6] = (fi.st_mode & S_IROTH) ? _perms[0] : _perms[3];
-  perms[7] = (fi.st_mode & S_IWOTH) ? _perms[1] : _perms[3];
-  perms[8] = (fi.st_mode & S_IXOTH) ? _perms[2] : _perms[3];
-  return perms;
-}
-
-char* nom_fsize_to_cstr(char* file) {
-  struct stat fi;
-  stat(file, &fi);
-  struct tm* tm = localtime(&fi.st_mtime);
-  char* time = (char*)calloc(1, 200);
-  memset(time, '\0', 200);
-  strftime(time, 200, "%a %H:%M:%S", tm);
-  return time;
 }
 
 long int nom_get_fsize(char* file) {
@@ -546,33 +512,36 @@ bool needs_rebuild(char* source_file, char* old_file) {
 }
 
 unsigned int rebuild(int argc, char* argv[], char* file, char* compiler) {
+  if(!needs_rebuild(file, base(file))) {
+    return 0;
+  }
   char* old_path = strcat(base(file), ".old");
   char* bin = base(file);
-  if(!needs_rebuild(file, base(file)))
-    return 0;
-  int newf = IS_PATH_EXIST(file);
+  bool newf = IS_PATH_EXIST(file);
   Nom_cmd cmd = {0};
-  nom_logger.new_line = OFF;
-  nom_log(NOM_PANIC, "failed to rebuild because: ");
-  nom_logger.show_mode = OFF;
-  nom_logger.new_line = ON;
-  if(file == NULL) {
-    nom_log(NOM_NONE, "file was null");
-    return 0;
+  if(file == NULL || compiler == NULL || argc < 1 || newf == false) {
+    nom_logger.new_line = OFF;
+    nom_log(NOM_PANIC, "failed to rebuild because: ");
+    nom_logger.show_mode = OFF;
+    nom_logger.new_line = ON;
+    if(file == NULL) {
+      nom_log(NOM_NONE, "file was null");
+      return 0;
+    }
+    if(compiler == NULL) {
+      nom_log(NOM_NONE, "compiler was null");
+      return 0;
+    }
+    if(argc < 1) { // apparently argc can be less than 0 if you run it using certain exec function
+      nom_log(NOM_NONE, "argc was %d instead of >= 1", argc);
+      return 0;
+    }
+    if(!newf) {
+      nom_log(NOM_WARN, "%s does not exist", file);
+      return 0;
+    }
+    nom_logger_reset();
   }
-  if(compiler == NULL) {
-    nom_log(NOM_NONE, "compiler was null");
-    return 0;
-  }
-  if(argc < 1) { // apparently argc can be less than 0 if you run it using certain exec function
-    nom_log(NOM_NONE, "argc was %d instead of >= 1", argc);
-    return 0;
-  }
-  if(!newf) {
-    nom_log(NOM_WARN, "%s does not exist", file);
-    return 0;
-  }
-  nom_logger_reset();
   int oldf = IS_PATH_EXIST(old_path);
   if(!oldf) {
     nom_log(NOM_WARN, "no %s, no roll back in case of failure", old_path);
@@ -653,7 +622,7 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
   int libf, filef;
   libf = IS_PATH_EXIST(lib);
   filef = IS_PATH_EXIST(file);
-  if(!lib || !file || !compiler || !libf || !filef) {
+  if(lib == NULL || file == NULL || compiler == NULL || libf == false || filef == false) {
     nom_logger.new_line = OFF;
     nom_log(NOM_PANIC, "failed to rebuild in IS_LIBRARY_MODIFIED because:");
     nom_logger.show_mode = OFF;
@@ -695,7 +664,7 @@ int IS_LIBRARY_MODIFIED(char* lib, char* file, char* compiler) {
   Nom_cmd cmd = {0};
   nom_cmd_append_many(&cmd, 5, compiler, "-ggdb", file, "-o", base(file));
   if(nom_run_sync(cmd)) {
-    nom_update_mtime(file);
+    nom_set_mtime(file);
   }
   Nom_cmd run = {0};
   nom_cmd_append(&run, base(file));
